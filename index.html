@@ -1,0 +1,2795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Earth Explorer: Journey to the Core</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%231d4e89'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23f2c14e'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --ink: #f7f4ea;
+    --bg: #071018;
+    --panel: #121c2e;
+    --line: #ffe56a;
+    --good: #b6ff9a;
+    --bad: #ffb4b4;
+    --btn: #1b314c;
+    --muted: #c9d4e3;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: Verdana, "Trebuchet MS", "Segoe UI", sans-serif;
+    overflow: hidden; user-select: none; -webkit-user-select: none;
+    touch-action: none;
+  }
+  button, input { font-family: inherit; }
+  button { cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 4px solid var(--line); outline-offset: 2px; }
+  #app { height: 100%; display: flex; flex-direction: column; }
+  #hud {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: minmax(168px, 230px) minmax(0, 1fr) minmax(168px, 230px);
+    grid-template-areas:
+      "depth center temp"
+      "next next next";
+    gap: 8px;
+    padding: 8px 10px 6px;
+    background: #0c1524;
+    border-bottom: 4px solid var(--line);
+    z-index: 4;
+    align-items: stretch;
+  }
+  .hud-corner {
+    border: 3px solid var(--line);
+    border-radius: 16px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-height: 74px;
+  }
+  #hud-depth { grid-area: depth; background: linear-gradient(160deg, #1a4468, #0e2438); border-color: #7ec8ff; }
+  #hud-temp { grid-area: temp; background: linear-gradient(160deg, #6a2c12, #2c120c); border-color: #ffb347; align-items: flex-end; text-align: right; }
+  .hud-kicker {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  #hud-depth .hud-kicker { color: #9ad7ff; }
+  #hud-temp .hud-kicker { color: #ffc46b; }
+  .hud-value { font-size: clamp(15px, 1.9vh, 20px); font-weight: 800; line-height: 1.25; }
+  #hud-center {
+    grid-area: center;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 8px; min-width: 0;
+  }
+  #hud-stats {
+    display: flex; flex-wrap: wrap; gap: 6px 14px;
+    font-size: clamp(16px, 2.15vh, 20px); line-height: 1.25; font-weight: 700;
+    min-width: 0;
+  }
+  #hud-stats span { white-space: nowrap; }
+  #hud-next { grid-area: next; color: var(--line); font-size: clamp(16px, 2.1vh, 20px); font-weight: 700; }
+  #hud-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+  #hud-actions button, .tool-btn, .small-btn {
+    background: var(--btn); color: var(--ink); border: 3px solid var(--line);
+    border-radius: 10px; font-weight: 700; font-size: 16px; padding: 8px 10px; min-height: 48px;
+  }
+  #stage { flex: 1 1 auto; position: relative; min-height: 0; }
+  canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: #000; }
+  #touch {
+    position: absolute; left: 8px; bottom: 8px; z-index: 5;
+    display: flex; align-items: flex-end; gap: 10px;
+  }
+  .dpad { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .dpad-mid { display: flex; gap: 4px; }
+  #touch button {
+    width: 76px; height: 64px; font-size: 28px; border-radius: 12px;
+    background: rgba(16, 28, 48, 0.92); color: white; border: 3px solid var(--line);
+  }
+  #btn-interact { width: 132px; height: 76px; font-size: 20px; font-weight: 800; }
+  #puzzle-tools {
+    position: absolute; left: 8px; bottom: 168px; z-index: 5;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  #memory-banner {
+    position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
+    z-index: 6; background: #0b1020; color: white; border: 4px solid var(--line);
+    border-radius: 14px; padding: 10px 18px; font-size: clamp(22px, 4vh, 40px);
+    font-weight: 800; text-align: center; max-width: min(92%, 760px); pointer-events: none;
+  }
+  .overlay {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(4, 8, 16, 0.72); padding: 12px;
+  }
+  .overlay.top { z-index: 20; }
+  .overlay.topmost { z-index: 25; background: rgba(0,0,0,0.78); }
+  .card {
+    width: min(760px, 100%);
+    max-height: calc(100% - 8px);
+    overflow: auto;
+    background: var(--panel);
+    border: 4px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 16px 18px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  }
+  .card h1, .card h2 { margin: 0 0 8px; line-height: 1.15; }
+  .card h1 { font-size: clamp(28px, 4vw, 44px); letter-spacing: 0.5px; }
+  .card h2 { font-size: clamp(24px, 3vw, 34px); }
+  .card p, .card li { font-size: clamp(18px, 2.4vh, 22px); line-height: 1.35; }
+  .sub { color: var(--line); font-size: clamp(18px, 2.5vh, 24px); font-weight: 800; margin-top: 0; }
+  label { display: block; font-size: 20px; font-weight: 700; margin: 10px 0 6px; }
+  input[type="text"] {
+    width: 100%; font-size: 24px; padding: 10px 12px; border-radius: 10px;
+    border: 3px solid var(--line); background: #fff; color: #111; user-select: text;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .primary, .answer, .ghost {
+    border-radius: 12px; font-weight: 800; border: 3px solid var(--line);
+  }
+  .primary {
+    background: #f2c14e; color: #1a1203; font-size: 22px; min-height: 56px; padding: 10px 16px;
+  }
+  .ghost { background: var(--btn); color: var(--ink); font-size: 18px; min-height: 52px; padding: 8px 12px; }
+  .answer {
+    display: block; width: 100%; text-align: left; margin: 8px 0;
+    background: #243956; color: white; font-size: clamp(18px, 2.5vh, 24px);
+    min-height: 64px; padding: 10px 14px;
+  }
+  .answer:hover, .primary:hover, .ghost:hover, #hud-actions button:hover { filter: brightness(1.12); }
+  .clue {
+    background: #0b1424; border-left: 6px solid #7ec8ff; padding: 10px 12px; margin: 8px 0;
+    font-size: clamp(18px, 2.4vh, 22px);
+  }
+  #battle-canvas { width: min(100%, 520px); height: auto; background: #070d18; border-radius: 12px; display: block; margin: 0 auto 8px; image-rendering: pixelated; }
+  #answers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .answer { margin: 0; }
+  .pips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+  .pip { width: 22px; height: 14px; background: #2a3548; border: 2px solid #d5dbe6; border-radius: 3px; }
+  .pip.on { background: #7dffb3; }
+  .energy-label { font-size: 16px; font-weight: 800; color: var(--muted); }
+  #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .45s linear; z-index: 40; }
+  #fade.on { opacity: 1; }
+  .gems { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+  .gem {
+    width: 120px; min-height: 92px; border-radius: 12px; border: 3px solid #111;
+    display: flex; align-items: flex-end; justify-content: center; padding: 6px;
+    font-weight: 800; color: #111; background: #ddd;
+  }
+  .gem.crust { background: linear-gradient(#d7b48a, #8d6240); }
+  .gem.mantle { background: linear-gradient(#ffb347, #c0392b); }
+  .gem.outer { background: linear-gradient(#ffe08a, #e67e22); }
+  .gem.inner { background: linear-gradient(#fff6d6, #f1c40f); }
+  .dojo-badge {
+    width: 180px; height: 180px; margin: 8px auto; border-radius: 50%;
+    border: 8px solid #111; background: radial-gradient(circle at 40% 35%, #fff4c2, #f2c14e 55%, #c48a12);
+    color: #1a1203; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-weight: 900; text-align: center; line-height: 1;
+  }
+  .dojo-badge b { font-size: 64px; }
+  .dojo-badge span { font-size: 16px; margin-top: 4px; }
+  #certificate {
+    display: none; width: 720px; max-width: 100%; margin: 12px auto; padding: 28px 32px;
+    background: #fff; color: #000; border: 8px double #000; text-align: center; user-select: text;
+  }
+  #certificate h2 { font-family: Georgia, "Times New Roman", serif; font-size: 32px; margin: 0; color: #000; }
+  #certificate h3 { font-family: Georgia, "Times New Roman", serif; font-size: 22px; margin: 6px 0 12px; color: #000; }
+  #certificate p { font-family: Georgia, "Times New Roman", serif; font-size: 18px; color: #000; margin: 8px 0; }
+  #certificate .sig { margin-top: 28px; border-top: 2px solid #000; width: 280px; display: inline-block; padding-top: 6px; }
+  .preview-wrap #certificate { display: block; }
+  #teacher-body { font-size: 18px; }
+  #teacher-body p { margin: 6px 0; }
+  .warn { color: var(--bad); font-weight: 800; }
+  [hidden] { display: none !important; }
+  @media print {
+    body * { visibility: hidden !important; }
+    #certificate, #certificate * { visibility: visible !important; }
+    #certificate {
+      display: block !important; position: absolute !important; left: 0 !important; top: 0 !important;
+      width: 100% !important; border-color: #000 !important; box-shadow: none !important;
+    }
+  }
+    @media (max-width: 900px) {
+      #hud {
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+          "depth temp"
+          "center center"
+          "next next";
+      }
+      #hud-temp { align-items: flex-start; text-align: left; }
+    }
+    @media (max-width: 720px) {
+      #answers { grid-template-columns: 1fr; }
+    }
+  @media (max-height: 720px) {
+    #touch button { width: 64px; height: 54px; font-size: 22px; }
+    #btn-interact { width: 112px; height: 64px; }
+    #puzzle-tools { bottom: 140px; }
+    .hud-corner { min-height: 0; padding: 6px 8px; }
+    .hud-value { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hud" hidden>
+    <div id="hud-depth" class="hud-corner">
+      <span class="hud-kicker">Depth</span>
+      <span class="hud-value" id="hud-depth-value"></span>
+    </div>
+    <div id="hud-center">
+      <div id="hud-stats">
+        <span id="hud-name"></span>
+        <span id="hud-layer"></span>
+        <span id="hud-creatures"></span>
+        <span id="hud-puzzle"></span>
+        <span id="hud-trainer"></span>
+      </div>
+      <div id="hud-actions">
+        <button type="button" id="btn-pause" aria-label="Pause">Pause</button>
+        <button type="button" id="btn-sound">Sound: On</button>
+        <button type="button" id="btn-read">Read: Off</button>
+        <button type="button" id="btn-restart">Restart</button>
+        <button type="button" id="btn-full">Fullscreen</button>
+      </div>
+    </div>
+    <div id="hud-temp" class="hud-corner">
+      <span class="hud-kicker">Temperature</span>
+      <span class="hud-value" id="hud-temp-value"></span>
+    </div>
+    <div id="hud-next"></div>
+  </header>
+  <div id="stage">
+    <canvas id="view" width="960" height="540"></canvas>
+    <div id="puzzle-tools" hidden>
+      <button type="button" class="tool-btn" id="btn-reset-puzzle">Reset Puzzle</button>
+      <button type="button" class="tool-btn" id="btn-watch" hidden>Watch Pattern</button>
+    </div>
+    <div id="memory-banner" hidden></div>
+    <div id="touch" hidden>
+      <div class="dpad" aria-label="Direction pad">
+        <button type="button" data-dir="up" aria-label="Move up">▲</button>
+        <div class="dpad-mid">
+          <button type="button" data-dir="left" aria-label="Move left">◀</button>
+          <button type="button" data-dir="down" aria-label="Move down">▼</button>
+          <button type="button" data-dir="right" aria-label="Move right">▶</button>
+        </div>
+      </div>
+      <button type="button" id="btn-interact">Interact</button>
+    </div>
+
+    <div id="title" class="overlay">
+      <div class="card">
+        <h1>EARTH EXPLORER</h1>
+        <p class="sub">JOURNEY TO THE CORE</p>
+        <p>Travel from Earth’s surface to its center. Explore four layers. Identify elements. Solve puzzles. Pass each trainer test.</p>
+        <form id="name-form">
+          <label for="name-input">Student name</label>
+          <input id="name-input" type="text" maxlength="24" autocomplete="name" placeholder="Type your name">
+          <div class="row">
+            <button class="primary" type="submit" id="btn-start">Start Mission</button>
+            <button class="ghost" type="button" id="btn-continue" hidden>Continue Mission</button>
+          </div>
+        </form>
+        <p id="title-error" class="warn"></p>
+        <div class="row">
+          <button type="button" class="ghost" id="title-sound">Sound: On</button>
+          <button type="button" class="ghost" id="title-read">Read Aloud: Off</button>
+          <button type="button" class="ghost" id="title-full">Fullscreen</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="dialogue" class="overlay" hidden>
+      <div class="card">
+        <p id="dialogue-text" aria-live="polite" style="white-space:pre-wrap; font-size:clamp(20px, 2.8vh, 26px); font-weight:700;"></p>
+        <div class="row">
+          <button type="button" class="primary" id="dialogue-next">Next</button>
+          <button type="button" class="ghost" id="dialogue-read">Read Aloud</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="battle" class="overlay" hidden>
+      <div class="card">
+        <canvas id="battle-canvas" width="640" height="200"></canvas>
+        <div class="energy-label" id="player-energy-label">Your knowledge energy</div>
+        <div class="pips" id="player-pips"></div>
+        <div class="energy-label" id="enemy-energy-label">Knowledge energy</div>
+        <div class="pips" id="enemy-pips"></div>
+        <p id="battle-progress" style="font-weight:800; margin:4px 0;"></p>
+        <p id="battle-question" aria-live="polite" style="font-size:clamp(20px, 2.8vh, 26px); font-weight:800;"></p>
+        <div class="clue" id="battle-clue"></div>
+        <div id="answers">
+          <button type="button" class="answer" data-i="0"></button>
+          <button type="button" class="answer" data-i="1"></button>
+          <button type="button" class="answer" data-i="2"></button>
+          <button type="button" class="answer" data-i="3"></button>
+        </div>
+        <div id="battle-result" hidden>
+          <p id="battle-result-text" style="font-size:22px; font-weight:700;"></p>
+          <button type="button" class="primary" id="battle-continue">Continue</button>
+        </div>
+        <div class="row">
+          <button type="button" class="ghost" id="battle-read">Read Aloud</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="wipe" class="overlay top" hidden>
+      <div class="card">
+        <h2 id="wipe-title">Your team wiped out!</h2>
+        <p id="wipe-answer"></p>
+        <button type="button" class="primary" id="wipe-ok">Continue</button>
+      </div>
+    </div>
+
+    <div id="pause" class="overlay" hidden>
+      <div class="card">
+        <h2>Paused</h2>
+        <p>Take your time. There is no timer.</p>
+        <div class="row">
+          <button type="button" class="primary" id="pause-resume">Resume</button>
+          <button type="button" class="ghost" id="pause-restart">Restart this layer</button>
+          <button type="button" class="ghost" id="pause-sound">Sound</button>
+          <button type="button" class="ghost" id="pause-read">Read Aloud</button>
+          <button type="button" class="ghost" id="pause-cert" hidden>View Certificate</button>
+          <button type="button" class="ghost" id="pause-title">Quit to Title</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="teacher" class="overlay top" hidden>
+      <div class="card">
+        <h2>Teacher Menu</h2>
+        <div id="teacher-body"></div>
+        <h3>Move student</h3>
+        <div class="row" id="teacher-warps"></div>
+        <h3>Puzzle solutions</h3>
+        <div id="teacher-solutions"></div>
+        <div class="row">
+          <button type="button" class="ghost" id="teacher-unlock">Unlock all layers</button>
+          <button type="button" class="ghost" id="teacher-boss">Open the final boss</button>
+          <button type="button" class="ghost" id="teacher-restart">Restart current room</button>
+          <button type="button" class="ghost" id="teacher-sound">Sound</button>
+          <button type="button" class="ghost" id="teacher-read">Read Aloud</button>
+          <button type="button" class="ghost" id="teacher-cert">Print completion certificate</button>
+          <button type="button" class="ghost" id="teacher-reset">Reset all progress</button>
+          <button type="button" class="primary" id="teacher-close">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirm" class="overlay topmost" hidden>
+      <div class="card">
+        <p id="confirm-text" style="font-size:22px; font-weight:700;"></p>
+        <div class="row">
+          <button type="button" class="primary" id="confirm-yes">Yes</button>
+          <button type="button" class="ghost" id="confirm-no">No</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="victory" class="overlay top" hidden>
+      <div class="card">
+        <h1>MISSION COMPLETE!</h1>
+        <p class="sub">Certified Earth Explorer</p>
+        <div class="dojo-badge"><b>10</b><span>DOJO POINTS</span></div>
+        <p id="vic-name"></p>
+        <p>You traveled through every layer of Earth and defeated the Core Guardian!</p>
+        <p><strong>You earned 10 Dojo Points!</strong></p>
+        <div class="gems">
+          <div class="gem crust">Crust</div>
+          <div class="gem mantle">Mantle</div>
+          <div class="gem outer">Outer Core</div>
+          <div class="gem inner">Inner Core</div>
+        </div>
+        <p id="vic-score"></p>
+        <p id="vic-creatures"></p>
+        <p><strong>Show this screen to your teacher to receive 10 Dojo Points.</strong></p>
+        <div class="row">
+          <button type="button" class="primary" id="vic-print">Print Certificate</button>
+          <button type="button" class="ghost" id="vic-again">Play Again</button>
+          <button type="button" class="ghost" id="vic-surface">Return to Surface</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cert-modal" class="overlay top preview-wrap" hidden>
+      <div class="card" style="background:#e8e8e8; color:#000;">
+        <div id="certificate">
+          <h2>Earth Explorer</h2>
+          <h3>Certificate of Completion</h3>
+          <p>This certifies that</p>
+          <p id="cert-name" style="font-size:28px; font-weight:700;"></p>
+          <p>Successfully traveled through Earth’s four layers</p>
+          <p>Defeated the Core Guardian</p>
+          <p>Earned 10 Dojo Points</p>
+          <p id="cert-date"></p>
+          <div class="sig">Teacher signature</div>
+        </div>
+        <div class="row">
+          <button type="button" class="primary" id="cert-print">Print</button>
+          <button type="button" class="ghost" id="cert-close">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="fade"></div>
+<div id="map-error" class="warn" style="position:fixed;left:8px;top:8px;z-index:50;background:#300;padding:8px;" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  const TILE = 48;
+  const SAVE_KEY = "earth-explorer-v1";
+  const SET_KEY = "earth-explorer-settings";
+  const NEXT = { surface: "crust", crust: "mantle", mantle: "outer", outer: "inner", inner: "boss" };
+  const PREV = { crust: "surface", mantle: "crust", outer: "mantle", inner: "outer", boss: "inner" };
+  const DIRS = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
+  const LAYER_INFO = {
+    surface: { title: "Surface", depth: "0 km", temp: "About 15°C" },
+    crust: { title: "Crust", depth: "Surface to approximately 70 km", temp: "Approximately 0–700°C" },
+    mantle: { title: "Mantle", depth: "Approximately 70–2,900 km", temp: "Approximately 500–4,000°C" },
+    outer: { title: "Outer Core", depth: "Approximately 2,900–5,150 km", temp: "Approximately 4,000–5,500°C" },
+    inner: { title: "Inner Core", depth: "Approximately 5,150–6,371 km", temp: "Approximately 5,000–6,000°C" },
+    boss: { title: "Earth's Center", depth: "Approximately 6,371 km", temp: "Approximately 5,000–6,000°C" }
+  };
+  const ELEMENTS = {
+    O: { name: "Oxygen", symbol: "O", color: "#3aa0ff", clue: "This element makes up a large part of Earth’s crust. Its symbol is O.", fact: "Oxygen is the most abundant element in Earth’s crust." },
+    Si: { name: "Silicon", symbol: "Si", color: "#c2a36b", clue: "This element joins with oxygen in many rocks. Its symbol is Si.", fact: "Silicon is the second most common element in the crust." },
+    Al: { name: "Aluminum", symbol: "Al", color: "#d9e0ea", clue: "This light metal is common in crust rocks. Its symbol is Al.", fact: "Aluminum is the most abundant metal in Earth’s crust." },
+    Fe: { name: "Iron", symbol: "Fe", color: "#c4552a", clue: "This metal is common in Earth, from the crust to the core. Its symbol is Fe.", fact: "Iron’s symbol Fe comes from the Latin word ferrum." },
+    Ca: { name: "Calcium", symbol: "Ca", color: "#f4f1e4", clue: "This element is found in limestone and bones. Its symbol is Ca.", fact: "Calcium is common in rocks of Earth’s crust." },
+    Na: { name: "Sodium", symbol: "Na", color: "#f2e27a", clue: "This element is found in table salt. Its symbol is Na.", fact: "Sodium’s symbol Na comes from the Latin word natrium." },
+    K: { name: "Potassium", symbol: "K", color: "#d7a0e8", clue: "This element is found in many minerals. Its symbol is K.", fact: "Potassium’s symbol K comes from the Latin word kalium." },
+    Mg: { name: "Magnesium", symbol: "Mg", color: "#8fbf7a", clue: "This metal is very common in the mantle. Its symbol is Mg.", fact: "Magnesium is a major element in Earth’s mantle." },
+    Ni: { name: "Nickel", symbol: "Ni", color: "#b7c4b0", clue: "This metal is mixed with iron in Earth’s core. Its symbol is Ni.", fact: "Nickel is common in the outer core and the inner core." }
+  };
+  const PLATES = [
+    { id: 0, name: "Circle", glyph: "●", x: 4, y: 10 },
+    { id: 1, name: "Triangle", glyph: "▲", x: 6, y: 10 },
+    { id: 2, name: "Square", glyph: "■", x: 4, y: 12 },
+    { id: 3, name: "Star", glyph: "★", x: 6, y: 12 },
+    { id: 4, name: "Diamond", glyph: "◆", x: 8, y: 11 }
+  ];
+  const ARROW_SOL = {
+    "5,11": "down", "5,12": "right", "6,12": "right",
+    "7,12": "up", "7,11": "right", "8,11": "down", "8,12": "down"
+  };
+  const ARROW_START = {
+    "5,11": "right", "5,12": "up", "6,12": "left",
+    "7,12": "left", "7,11": "up", "8,11": "right", "8,12": "up"
+  };
+  const ARROW_NUM = {
+    "5,11": 1, "5,12": 2, "6,12": 3,
+    "7,12": 4, "7,11": 5, "8,11": 6, "8,12": 7
+  };
+  const FLOW = [[4, 11], [5, 11], [5, 12], [6, 12], [7, 12], [7, 11], [8, 11], [8, 12], [8, 13]];
+  const PILLARS = [{ x: 6, y: 10 }, { x: 6, y: 11 }, { x: 6, y: 13 }];
+  const GOALS = [{ x: 3, y: 10 }, { x: 3, y: 13 }, { x: 10, y: 13 }];
+  const ROCK_START = [{ x: 4, y: 12 }, { x: 7, y: 12 }, { x: 9, y: 12 }];
+  const CREATURE_POS = {
+    crust: [[4, 12], [8, 12], [3, 14], [9, 14]],
+    mantle: [[6, 12], [3, 10], [3, 13], [10, 13]],
+    outer: [[10, 12], [5, 13], [9, 11]],
+    inner: [[4, 10], [4, 12], [6, 12]]
+  };
+  const SPAWN = {
+    surface: { x: 8, y: 8, facing: "up" },
+    crust: { x: 8, y: 2, facing: "down" },
+    mantle: { x: 8, y: 2, facing: "down" },
+    outer: { x: 8, y: 2, facing: "down" },
+    inner: { x: 8, y: 2, facing: "down" },
+    boss: { x: 8, y: 10, facing: "up" }
+  };
+
+  function Q(prompt, correct, wrong, explain) { return { prompt, correct, wrong, explain }; }
+  const TEMPS = ["Approximately 0–700°C", "Approximately 500–4,000°C", "Approximately 4,000–5,500°C", "Approximately 5,000–6,000°C"];
+  const DEPTHS = ["Surface to approximately 70 km", "Approximately 70–2,900 km", "Approximately 2,900–5,150 km", "Approximately 5,150–6,371 km"];
+  function others(list, correct) { return list.filter((x) => x !== correct); }
+  const BANKS = {
+    crust: {
+      temp: [
+        Q("What is the approximate temperature of the crust?", TEMPS[0], others(TEMPS, TEMPS[0]), "The crust is approximately 0–700°C."),
+        Q("Which temperature range matches the crust?", TEMPS[0], others(TEMPS, TEMPS[0]), "The crust is approximately 0–700°C.")
+      ],
+      depth: [
+        Q("What is the approximate depth of the crust?", DEPTHS[0], others(DEPTHS, DEPTHS[0]), "The crust reaches from the surface to approximately 70 km."),
+        Q("How deep is Earth’s crust?", DEPTHS[0], others(DEPTHS, DEPTHS[0]), "The crust reaches from the surface to approximately 70 km.")
+      ],
+      fact: [
+        Q("Which layer do humans live on?", "The crust", ["The mantle", "The outer core", "The inner core"], "Humans live on the crust."),
+        Q("Is the crust solid or liquid?", "Solid", ["Liquid", "A gas", "Liquid metal"], "The crust is Earth’s thin, solid outer layer."),
+        Q("What does the crust contain?", "Continents, oceans, rocks, and soil", ["Only liquid iron", "Only nickel", "Empty space"], "The crust contains continents, oceans, rocks, and soil.")
+      ],
+      element: [
+        Q("Which two elements are most common in the crust?", "Oxygen and silicon", ["Iron and nickel", "Gold and silver", "Hydrogen and helium"], "Oxygen and silicon are the most common elements in the crust."),
+        Q("Which element has the symbol O and is common in the crust?", "Oxygen", ["Iron", "Nickel", "Sodium"], "Oxygen’s symbol is O.")
+      ]
+    },
+    mantle: {
+      temp: [
+        Q("What is the approximate temperature of the mantle?", TEMPS[1], others(TEMPS, TEMPS[1]), "The mantle is approximately 500–4,000°C."),
+        Q("Which temperature range matches the mantle?", TEMPS[1], others(TEMPS, TEMPS[1]), "The mantle is approximately 500–4,000°C.")
+      ],
+      depth: [
+        Q("What is the approximate depth of the mantle?", DEPTHS[1], others(DEPTHS, DEPTHS[1]), "The mantle is approximately 70–2,900 km deep."),
+        Q("How deep is the mantle?", DEPTHS[1], others(DEPTHS, DEPTHS[1]), "The mantle is approximately 70–2,900 km deep.")
+      ],
+      fact: [
+        Q("Why is the mantle important to Earth’s surface?", "Its slow flow helps move tectonic plates", ["Humans live there", "It makes Earth’s magnetic field", "It is made of ice"], "The mantle’s slow movement helps move tectonic plates."),
+        Q("Which sentence is true about the mantle?", "It is mostly solid, but it slowly flows", ["It is liquid metal", "It is a thin cold shell", "It is a gas"], "The mantle is mostly solid rock that slowly flows."),
+        Q("Which layer is Earth’s thickest?", "The mantle", ["The crust", "The outer core", "The inner core"], "The mantle is Earth’s thickest layer.")
+      ],
+      element: [
+        Q("Which elements appear most often in the mantle?", "Oxygen, silicon, and magnesium", ["Gold and silver", "Carbon and hydrogen", "Sodium and chlorine"], "Oxygen, silicon, and magnesium are very common in the mantle."),
+        Q("Which metal is common in the mantle and has the symbol Mg?", "Magnesium", ["Nickel", "Sodium", "Gold"], "Magnesium’s symbol is Mg.")
+      ]
+    },
+    outer: {
+      temp: [
+        Q("What is the approximate temperature of the outer core?", TEMPS[2], others(TEMPS, TEMPS[2]), "The outer core is approximately 4,000–5,500°C."),
+        Q("Which temperature range matches the outer core?", TEMPS[2], others(TEMPS, TEMPS[2]), "The outer core is approximately 4,000–5,500°C.")
+      ],
+      depth: [
+        Q("What is the approximate depth of the outer core?", DEPTHS[2], others(DEPTHS, DEPTHS[2]), "The outer core is approximately 2,900–5,150 km deep."),
+        Q("How deep is the outer core?", DEPTHS[2], others(DEPTHS, DEPTHS[2]), "The outer core is approximately 2,900–5,150 km deep.")
+      ],
+      fact: [
+        Q("What is the outer core made of?", "Moving liquid iron and nickel", ["Solid soil", "Frozen water", "Only oxygen gas"], "The outer core is moving liquid iron and nickel."),
+        Q("What does the outer core’s movement help create?", "Earth’s magnetic field", ["The oceans", "The soil", "The Moon"], "Moving liquid metal helps create Earth’s magnetic field."),
+        Q("The outer core is mostly which state of matter?", "Liquid", ["Solid", "Gas", "Frozen"], "The outer core is liquid.")
+      ],
+      element: [
+        Q("Which two elements are most common in the outer core?", "Iron and nickel", ["Oxygen and silicon", "Calcium and sodium", "Gold and silver"], "The outer core is mostly iron and nickel."),
+        Q("Which element is more common than nickel in the outer core?", "Iron", ["Oxygen", "Silicon", "Sodium"], "Iron appears most often in the outer core.")
+      ]
+    },
+    inner: {
+      temp: [
+        Q("What is the approximate temperature of the inner core?", TEMPS[3], others(TEMPS, TEMPS[3]), "The inner core is approximately 5,000–6,000°C."),
+        Q("Which temperature range matches the inner core?", TEMPS[3], others(TEMPS, TEMPS[3]), "The inner core is approximately 5,000–6,000°C.")
+      ],
+      depth: [
+        Q("What is the approximate depth of the inner core?", DEPTHS[3], others(DEPTHS, DEPTHS[3]), "The inner core is approximately 5,150–6,371 km deep."),
+        Q("How deep is the inner core?", DEPTHS[3], others(DEPTHS, DEPTHS[3]), "The inner core is approximately 5,150–6,371 km deep.")
+      ],
+      fact: [
+        Q("Why does the inner core stay solid?", "Enormous pressure keeps it solid", ["It is cold", "It is made of ice", "It is far from the center"], "Enormous pressure keeps the inner core solid."),
+        Q("Where is the inner core?", "At Earth’s center", ["On the surface", "Above the crust", "In the sky"], "The inner core is at Earth’s center."),
+        Q("The inner core is mostly which state of matter?", "Solid", ["Liquid", "Gas", "Empty"], "The inner core is solid.")
+      ],
+      element: [
+        Q("Which elements are most common in the inner core?", "Iron and nickel", ["Oxygen and silicon", "Sodium and potassium", "Carbon and nitrogen"], "The inner core is mostly iron and nickel."),
+        Q("Which element is the most common encounter in the inner core?", "Iron", ["Oxygen", "Silicon", "Calcium"], "Iron is the most common element in the inner core.")
+      ]
+    }
+  };
+  const BOSS_POOL = [
+    Q("What is the order of layers from the surface downward?", "Crust, mantle, outer core, inner core", ["Crust, outer core, mantle, inner core", "Mantle, crust, inner core, outer core", "Inner core, outer core, mantle, crust"], "From the surface downward: crust, mantle, outer core, inner core."),
+    Q("Which layer is the deepest?", "The inner core", ["The crust", "The mantle", "The outer core"], "The inner core is Earth’s deepest layer."),
+    Q("Which layer do humans live on?", "The crust", ["The mantle", "The outer core", "The inner core"], "Humans live on the crust."),
+    Q("What is the approximate temperature of the crust?", TEMPS[0], others(TEMPS, TEMPS[0]), "The crust is approximately 0–700°C."),
+    Q("What is the approximate temperature of the mantle?", TEMPS[1], others(TEMPS, TEMPS[1]), "The mantle is approximately 500–4,000°C."),
+    Q("What is the approximate temperature of the outer core?", TEMPS[2], others(TEMPS, TEMPS[2]), "The outer core is approximately 4,000–5,500°C."),
+    Q("What is the approximate temperature of the inner core?", TEMPS[3], others(TEMPS, TEMPS[3]), "The inner core is approximately 5,000–6,000°C."),
+    Q("What is the approximate depth of the crust?", DEPTHS[0], others(DEPTHS, DEPTHS[0]), "The crust goes from the surface to approximately 70 km."),
+    Q("What is the approximate depth of the mantle?", DEPTHS[1], others(DEPTHS, DEPTHS[1]), "The mantle is approximately 70–2,900 km deep."),
+    Q("What is the approximate depth of the outer core?", DEPTHS[2], others(DEPTHS, DEPTHS[2]), "The outer core is approximately 2,900–5,150 km deep."),
+    Q("What is the approximate depth of the inner core?", DEPTHS[3], others(DEPTHS, DEPTHS[3]), "The inner core is approximately 5,150–6,371 km deep."),
+    Q("What is the state of matter of the crust?", "Solid", ["Liquid", "Gas", "Plasma only"], "The crust is solid."),
+    Q("What is the state of matter of the mantle?", "Mostly solid, but it slowly flows", ["Liquid metal", "A gas", "Frozen ice"], "The mantle is mostly solid, but it slowly flows."),
+    Q("What is the state of matter of the outer core?", "Liquid", ["Solid", "Gas", "Empty"], "The outer core is liquid."),
+    Q("What is the state of matter of the inner core?", "Solid", ["Liquid", "Gas", "Hollow"], "The inner core is solid."),
+    Q("Why does the inner core stay solid even though it is extremely hot?", "Enormous pressure keeps it solid", ["It is cold", "It is made of ice", "Sunlight cannot reach it"], "Enormous pressure keeps the inner core solid."),
+    Q("Which two elements are most common in the crust?", "Oxygen and silicon", ["Iron and nickel", "Gold and silver", "Hydrogen and helium"], "Oxygen and silicon are the most common crust elements."),
+    Q("Which elements appear most often in the mantle?", "Oxygen, silicon, and magnesium", ["Only gold", "Only nickel", "Carbon and helium"], "Oxygen, silicon, and magnesium are very common in the mantle."),
+    Q("Which two elements make up most of the outer core?", "Iron and nickel", ["Oxygen and silicon", "Calcium and sodium", "Carbon and nitrogen"], "The outer core is mostly iron and nickel."),
+    Q("Which two elements make up most of the inner core?", "Iron and nickel", ["Oxygen and silicon", "Sodium and potassium", "Aluminum and calcium"], "The inner core is mostly iron and nickel."),
+    Q("How does the mantle help move tectonic plates?", "Hot rock in the mantle slowly flows", ["The crust is liquid", "The Moon pulls the plates", "Wind pushes the plates"], "The mantle’s slow flow helps move tectonic plates."),
+    Q("How does the outer core help create Earth’s magnetic field?", "Moving liquid iron and nickel", ["Frozen water spinning", "Wind in the crust", "Solid gold spinning"], "Moving liquid iron and nickel help create the magnetic field."),
+    Q("What does Earth’s magnetic field protect Earth from?", "Harmful particles from the Sun", ["Rain", "Soil", "The oceans"], "The magnetic field protects Earth from harmful particles from the Sun."),
+    Q("Which layer is Earth’s thickest?", "The mantle", ["The crust", "The outer core", "The inner core"], "The mantle is Earth’s thickest layer."),
+    Q("The crust contains continents, oceans, rocks, and what else?", "Soil", ["Liquid nickel", "Empty space", "Only gas"], "The crust contains continents, oceans, rocks, and soil."),
+    Q("Where is Earth’s inner core located?", "At the center of Earth", ["Above the clouds", "Under the oceans only", "Outside the crust"], "The inner core is at Earth’s center.")
+  ];
+
+  const GUIDE = {
+    surface: [
+      "Welcome, Earth Explorer!",
+      "Your mission is to travel from Earth’s surface to its center.",
+      "You will pass through the crust, mantle, outer core, and inner core.",
+      "Each layer becomes deeper and hotter.",
+      "Element creatures wait inside each puzzle. You meet them while you solve it.",
+      "Use WASD or the arrow keys to move.",
+      "Press E or Space to talk, inspect, and interact.",
+      "You can also use the on-screen buttons.",
+      "Walk up to an element creature to identify it.",
+      "Answer correctly to attack.",
+      "Wrong answers restart the current room.",
+      "Complete the puzzle and trainer test to unlock the downward escalator.",
+      "The final boss sends you back to the surface after an incorrect answer.",
+      "The escalator behind me leads into the crust.",
+      "In each room, the upward escalator goes back to the previous room.",
+      "Ride down into a room again to reset that room."
+    ],
+    crust: [
+      "The crust is Earth’s thin, solid outer layer.",
+      "We live on it!",
+      "It contains continents, oceans, rocks, and soil.",
+      "Oxygen and silicon are the most common elements in the crust.",
+      "Step on every thin crust slab once.",
+      "If you step on a slab a second time, the crust cracks and you fall back to the start of this room.",
+      "The soil path in the middle is safe. You may walk it again.",
+      "There are two slab paths. Do one, walk back on the soil, then do the other.",
+      "On each path, take the outer bend. A straight step skips slabs.",
+      "An element creature stands on each path and on each outer bend. Identify it, then keep walking.",
+      "The gate stays shut until every slab has been stepped on once.",
+      "Then the floor becomes solid and the gate opens.",
+      "The upward escalator behind you goes back to the surface."
+    ],
+    mantle: [
+      "The mantle is Earth’s thickest layer.",
+      "It is made of extremely hot rock.",
+      "It is mostly solid, but it slowly flows.",
+      "This slow movement helps move tectonic plates.",
+      "Push three hot rocks onto the three glowing spots.",
+      "A stone wall has one gap in the middle.",
+      "Element creatures guard that gap and the glowing spots.",
+      "Identify a creature before you push a rock through its tile.",
+      "Move the right rock onto its spot before you use the gap.",
+      "If you push the middle rock into the gap too soon, it gets stuck.",
+      "Walk into a rock to push it.\nYou cannot pull a rock.",
+      "If a rock gets stuck, step out of the puzzle or press Reset Puzzle."
+    ],
+    outer: [
+      "The outer core is made of moving liquid iron and nickel.",
+      "The movement of this liquid metal helps create Earth’s magnetic field, which protects Earth from harmful particles from the Sun.",
+      "There is one line of arrows from the energy source to the generator.",
+      "Stand on each arrow and press E or Interact to turn it.",
+      "Turn every arrow so the line points forward along the path.",
+      "When the whole line connects, energy flows and the door opens.",
+      "Element creatures wait beside the path. Identify them as you go.",
+      "Press Reset Puzzle if you want to start the arrows over."
+    ],
+    inner: [
+      "The inner core is Earth’s deepest and hottest layer.",
+      "It is mostly iron and nickel.",
+      "Even though it is extremely hot, enormous pressure keeps it solid.",
+      "These plates are solid iron crystals.",
+      "Circle, Square, and Star each have an element creature.",
+      "Identify that creature, then step on the plate.",
+      "Press Watch Pattern.",
+      "The plates flash in order.\nThen walk on them in the same order.",
+      "Use the empty floor between plates.\nDo not step on an extra plate.",
+      "First there are 4 steps.\nOne plate does not flash.",
+      "Then there are 6 steps.",
+      "In the longer pattern, every plate flashes, and one plate flashes again.",
+      "A wrong plate makes the floor crack.\nYou return to the start of this room."
+    ]
+  };
+  const TRAINER_INTRO = {
+    crust: ["I am the Crust Trainer.", "Answer 4 questions.", "A wrong answer restarts this room.", "There is no timer. Take your time."],
+    mantle: ["I am the Mantle Trainer.", "Answer 4 questions.", "A wrong answer restarts this room.", "There is no timer. Take your time."],
+    outer: ["I am the Outer Core Trainer.", "Answer 4 questions.", "A wrong answer restarts this room.", "There is no timer. Take your time."],
+    inner: ["I am the Inner Core Trainer.", "Answer 4 questions.", "A wrong answer restarts this room.", "There is no timer. Take your time."]
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("view");
+  const ctx = canvas.getContext("2d");
+  const bcanvas = $("battle-canvas");
+  const bctx = bcanvas.getContext("2d");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let settings = { sound: true, readAloud: false };
+  let state = null;
+  let viewW = 960, viewH = 540, dpr = 1;
+  const held = { up: false, down: false, left: false, right: false };
+  let lastDir = "down";
+  let dialogueLines = [], dialogueIndex = 0, dialogueCb = null, blockAdvance = false;
+  let confirmCb = null;
+  let tPresses = [];
+  let lastTs = 0;
+  let actx = null;
+  const MAPS = {};
+
+  function blank(w, h) {
+    const g = [];
+    for (let y = 0; y < h; y++) {
+      const row = [];
+      for (let x = 0; x < w; x++) row.push(x === 0 || y === 0 || x === w - 1 || y === h - 1 ? "#" : ".");
+      g.push(row);
+    }
+    return g;
+  }
+  function hwall(g, y, x0, x1) { for (let x = x0; x <= x1; x++) g[y][x] = "#"; }
+  function buildSurface() {
+    const g = blank(17, 12);
+    [7, 8, 9].forEach((x) => { g[1][x] = "v"; });
+    [[2, 4], [14, 4], [3, 8], [13, 8], [5, 10], [11, 10]].forEach(([x, y]) => { g[y][x] = "*"; });
+    return g;
+  }
+  function buildCrust() {
+    const g = blank(17, 20);
+    [7, 8, 9].forEach((x) => { g[1][x] = "^"; });
+    hwall(g, 10, 1, 15); g[10][6] = ".";
+    hwall(g, 11, 1, 15); g[11][6] = "=";
+    hwall(g, 12, 1, 15);
+    [4, 5, 7, 8].forEach((x) => { g[12][x] = "~"; });
+    g[12][6] = "s";
+    hwall(g, 13, 1, 15);
+    [3, 4, 8, 9].forEach((x) => { g[13][x] = "~"; });
+    g[13][6] = "s";
+    hwall(g, 14, 1, 15);
+    [3, 4, 5, 7, 8, 9].forEach((x) => { g[14][x] = "~"; });
+    g[14][6] = "s";
+    hwall(g, 15, 1, 15); g[15][6] = "s";
+    hwall(g, 16, 1, 15); g[16][6] = "G";
+    [7, 8, 9].forEach((x) => { g[18][x] = "v"; });
+    return g;
+  }
+  function buildDepth() {
+    const g = blank(17, 20);
+    [7, 8, 9].forEach((x) => { g[1][x] = "^"; });
+    hwall(g, 9, 1, 15); g[9][8] = ".";
+    for (let y = 10; y <= 13; y++) {
+      hwall(g, y, 1, 15);
+      for (let x = 3; x <= 10; x++) g[y][x] = ".";
+    }
+    g[12][11] = "D";
+    for (let x = 12; x <= 14; x++) g[12][x] = ".";
+    for (let x = 12; x <= 14; x++) g[13][x] = ".";
+    for (let y = 14; y <= 16; y++) {
+      hwall(g, y, 1, 15);
+      for (let x = 12; x <= 14; x++) g[y][x] = ".";
+    }
+    [7, 8, 9].forEach((x) => { g[18][x] = "v"; });
+    return g;
+  }
+  function buildBoss() {
+    const g = blank(17, 14);
+    [7, 8, 9].forEach((x) => { g[12][x] = "^"; });
+    return g;
+  }
+  function cloneGrid(g) { return g.map((row) => row.slice()); }
+
+  function validateMaps() {
+    const issues = [];
+    Object.entries(MAPS).forEach(([room, g]) => {
+      const w = g[0].length;
+      g.forEach((row, y) => { if (row.length !== w) issues.push(room + " row " + y); });
+      const s = SPAWN[room];
+      const ch = g[s.y][s.x];
+      if (ch === "#" || ch === "*" || ch === "D") issues.push(room + " spawn blocked");
+    });
+    ["crust", "mantle", "outer", "inner"].forEach((room) => {
+      entities(room).forEach((e) => {
+        const ch = MAPS[room][e.y] && MAPS[room][e.y][e.x];
+        if (!ch || ch === "#" || ch === "*") issues.push(room + " entity " + e.type + " on " + ch + " at " + e.x + "," + e.y);
+      });
+    });
+    if (MAPS.crust[12][5] !== "~" || MAPS.crust[13][3] !== "~" || MAPS.crust[13][9] !== "~" || MAPS.crust[16][6] !== "G" || MAPS.crust[12][6] !== "s") issues.push("crust path");
+    if (crustTileKeys().length !== 14) issues.push("crust tile count");
+    PILLARS.forEach((p) => {
+      if (GOALS.some((g) => g.x === p.x && g.y === p.y) || ROCK_START.some((r) => r.x === p.x && r.y === p.y)) issues.push("pillar overlap");
+    });
+    Object.entries(CREATURE_POS).forEach(([room, list]) => {
+      const seen = {};
+      list.forEach(([x, y]) => {
+        const k = x + "," + y;
+        if (seen[k]) issues.push(room + " creature overlap");
+        seen[k] = true;
+        if (room === "mantle" && (ROCK_START.some((r) => r.x === x && r.y === y) || PILLARS.some((p) => p.x === x && p.y === y))) issues.push("creature blocked");
+        if (room === "outer" && ((x === 4 && y === 11) || (x === 8 && y === 13))) issues.push("creature on machine");
+        if (room === "crust" && MAPS.crust[y][x] !== "~") issues.push("crust creature off slab");
+      });
+    });
+    if (MAPS.mantle[12][11] !== "D") issues.push("door missing");
+    GOALS.forEach((gl) => { if (MAPS.mantle[gl.y][gl.x] !== ".") issues.push("goal blocked"); });
+    ROCK_START.forEach((r) => { if (MAPS.mantle[r.y][r.x] !== ".") issues.push("rock blocked"); });
+    Object.keys(ARROW_SOL).forEach((k) => {
+      const [x, y] = k.split(",").map(Number);
+      if (MAPS.outer[y][x] !== ".") issues.push("arrow blocked " + k);
+    });
+    PLATES.forEach((p) => { if (MAPS.inner[p.y][p.x] !== ".") issues.push("plate blocked"); });
+    if (BOSS_POOL.length < 20) issues.push("boss pool");
+    return issues;
+  }
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+  function weighted(pairs) {
+    let total = 0;
+    pairs.forEach((p) => { total += p[1]; });
+    let r = Math.random() * total;
+    for (let i = 0; i < pairs.length; i++) {
+      r -= pairs[i][1];
+      if (r <= 0) return pairs[i][0];
+    }
+    return pairs[0][0];
+  }
+  function pickCrust() {
+    const w = [["O", 5], ["Si", 5], ["Al", 2], ["Fe", 2], ["Ca", 1], ["Na", 1], ["K", 1], ["Mg", 1]];
+    return shuffle(["O", "Si", weighted(w), weighted(w)]);
+  }
+  function pickMantle() {
+    return shuffle(["O", "Si", "Mg", weighted([["O", 3], ["Si", 3], ["Mg", 3], ["Fe", 2]])]);
+  }
+  function freshInner() {
+    const ids = [0, 1, 2, 3, 4];
+    const seq1 = shuffle(ids).slice(0, 4);
+    const base = shuffle(ids);
+    const extra = base[Math.floor(Math.random() * base.length)];
+    return { stage: 1, seq1: seq1, seq2: base.concat([extra]), phase: "idle", step: 0, flash: -1, flashT: 0, hinted: false };
+  }
+  function freshPuzzle(room) {
+    if (room === "mantle") return { rocks: ROCK_START.map((r) => ({ x: r.x, y: r.y })), layout: 3 };
+    if (room === "outer") return { dirs: Object.assign({}, ARROW_START), layout: 4 };
+    if (room === "inner") return freshInner();
+    if (room === "crust") return { cracks: {}, layout: 3 };
+    return {};
+  }
+  function createState(name) {
+    const s = {
+      name: name,
+      screen: "play",
+      room: "surface",
+      tx: SPAWN.surface.x, ty: SPAWN.surface.y,
+      px: SPAWN.surface.x * TILE, py: SPAWN.surface.y * TILE,
+      facing: "up",
+      moving: false, moveT: 0, fromPx: 0, fromPy: 0, toPx: 0, toPy: 0, destTx: 8, destTy: 8,
+      spoke: { surface: false, crust: false, mantle: false, outer: false, inner: false },
+      crew: { crust: pickCrust(), mantle: pickMantle(), outer: shuffle(["Fe", "Fe", "Ni"]), inner: shuffle(["Fe", "Fe", "Ni"]) },
+      defeated: { crust: [], mantle: [], outer: [], inner: [] },
+      puzzleDone: { crust: false, mantle: false, outer: false, inner: false },
+      trainerDone: { crust: false, mantle: false, outer: false, inner: false },
+      announced: { crust: false, mantle: false, outer: false, inner: false },
+      arrivedNote: {},
+      puzzles: { crust: freshPuzzle("crust"), mantle: freshPuzzle("mantle"), outer: freshPuzzle("outer"), inner: freshPuzzle("inner") },
+      dojoEarned: false, earnedOn: "", winIdentified: 0, atVictory: false,
+      sound: settings.sound, readAloud: settings.readAloud,
+      lastSlot: -1,
+      time: 0, bumpT: 0, walkT: 0
+    };
+    return s;
+  }
+
+  function entities(room) {
+    const list = [];
+    if (room === "surface") list.push({ type: "guide", x: 8, y: 3 });
+    if (room === "crust") {
+      list.push({ type: "guide", x: 6, y: 3 });
+      list.push({ type: "trainer", x: 12, y: 17 });
+    }
+    if (room === "mantle" || room === "outer" || room === "inner") {
+      list.push({ type: "guide", x: 6, y: 3 });
+      list.push({ type: "trainer", x: 8, y: 17 });
+    }
+    if (room === "outer") {
+      list.push({ type: "machine", kind: "source", x: 4, y: 11 });
+      list.push({ type: "machine", kind: "gen", x: 8, y: 13 });
+    }
+    if (room === "boss") list.push({ type: "guardian", x: 8, y: 5 });
+    (CREATURE_POS[room] || []).forEach((p, i) => list.push({ type: "creature", x: p[0], y: p[1], i: i }));
+    return list;
+  }
+  function tileAt(room, x, y) {
+    const g = MAPS[room];
+    if (!g || y < 0 || x < 0 || y >= g.length || x >= g[0].length) return "#";
+    return g[y][x];
+  }
+  function inChamber(x, y) { return x >= 3 && x <= 10 && y >= 10 && y <= 13; }
+  function defeatedIndex(room, i) { return state.defeated[room] && state.defeated[room].indexOf(i) !== -1; }
+  function entityBlocks(room, x, y) {
+    return entities(room).some((e) => {
+      if (e.x !== x || e.y !== y) return false;
+      if (e.type === "creature") return !defeatedIndex(room, e.i);
+      return e.type === "guide" || e.type === "trainer" || e.type === "guardian" || e.type === "machine";
+    });
+  }
+  function terrainBlocks(room, x, y) {
+    const ch = tileAt(room, x, y);
+    if (ch === "#" || ch === "*") return true;
+    if (room === "mantle" && PILLARS.some((p) => p.x === x && p.y === y)) return true;
+    if (ch === "D") return !state.puzzleDone[room];
+    if (ch === "G") return !(state && state.puzzleDone.crust);
+    return false;
+  }
+  function crustTileKeys() {
+    const keys = [];
+    const g = MAPS.crust;
+    if (!g) return keys;
+    g.forEach((row, y) => row.forEach((ch, x) => { if (ch === "~") keys.push(x + "," + y); }));
+    return keys;
+  }
+  function crustAllStepped() {
+    const cracks = state.puzzles.crust.cracks;
+    return crustTileKeys().every((k) => cracks[k]);
+  }
+  function roomDirty(room) {
+    if (!state || room === "surface" || room === "boss") return false;
+    const cracks = room === "crust" && state.puzzles.crust && state.puzzles.crust.cracks && Object.keys(state.puzzles.crust.cracks).length > 0;
+    return !!(state.spoke[room] || state.defeated[room].length || state.puzzleDone[room] || state.trainerDone[room] || cracks);
+  }
+  function rockAt(x, y) {
+    if (!state || state.room !== "mantle") return null;
+    return state.puzzles.mantle.rocks.find((r) => r.x === x && r.y === y) || null;
+  }
+  function blocked(room, x, y) {
+    if (terrainBlocks(room, x, y)) return true;
+    if (entityBlocks(room, x, y)) return true;
+    if (room === "mantle" && rockAt(x, y)) return true;
+    return false;
+  }
+  function missing(room) {
+    if (!state || room === "surface" || room === "boss") return [];
+    const out = [];
+    if (!state.spoke[room]) out.push("Talk to the guide");
+    const total = state.crew[room].length;
+    const got = state.defeated[room].length;
+    if (got < total) out.push("Identify element creatures (" + got + "/" + total + ")");
+    if (!state.puzzleDone[room]) out.push("Solve the puzzle");
+    if (!state.trainerDone[room]) out.push("Pass the trainer test");
+    return out;
+  }
+  function identifiedCount() {
+    return ["crust", "mantle", "outer", "inner"].reduce((sum, room) => sum + state.defeated[room].length, 0);
+  }
+
+  function ac() {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume();
+    return actx;
+  }
+  function tone(freq, dur, type, gain, delay) {
+    if (!settings.sound && !(state && state.sound)) return;
+    if (state && state.sound === false) return;
+    try {
+      const a = ac();
+      const o = a.createOscillator();
+      const g = a.createGain();
+      o.type = type || "square";
+      o.frequency.value = freq;
+      o.connect(g); g.connect(a.destination);
+      const t0 = a.currentTime + (delay || 0);
+      g.gain.setValueAtTime(gain || 0.05, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    } catch (err) { /* ignore audio errors */ }
+  }
+  function sfx(name) {
+    if (state && !state.sound) return;
+    if (!state && !settings.sound) return;
+    if (name === "step") tone(170, 0.04, "square", 0.02);
+    if (name === "bump") tone(90, 0.08, "square", 0.03);
+    if (name === "talk") tone(520, 0.07, "sine", 0.04);
+    if (name === "correct") { tone(523, 0.12, "square", 0.05); tone(659, 0.12, "square", 0.05, 0.1); tone(784, 0.18, "square", 0.05, 0.2); }
+    if (name === "wrong") tone(110, 0.28, "sawtooth", 0.04);
+    if (name === "attack") tone(240, 0.2, "square", 0.05);
+    if (name === "ride") tone(80, 0.4, "triangle", 0.04);
+    if (name === "crack") tone(200, 0.12, "square", 0.05);
+    if (name === "fall") tone(70, 0.4, "sawtooth", 0.05);
+    if (name === "success") { tone(660, 0.1, "square", 0.05); tone(880, 0.16, "square", 0.05, 0.1); }
+    if (name === "click") tone(440, 0.05, "square", 0.03);
+    if (name === "push") tone(150, 0.08, "square", 0.04);
+    if (name === "ping") tone(740, 0.08, "sine", 0.04);
+    if (name === "victory") {
+      [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, "square", 0.05, i * 0.14));
+    }
+  }
+  function speak(text) {
+    if (!window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.95;
+      window.speechSynthesis.speak(u);
+    } catch (err) { /* ignore speech errors */ }
+  }
+  function maybeSpeak(text) {
+    if (state && state.readAloud) speak(text);
+    else if (!state && settings.readAloud) speak(text);
+  }
+
+  function saveSettings() {
+    try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (err) { /* ignore */ }
+  }
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(SET_KEY);
+      if (raw) settings = Object.assign(settings, JSON.parse(raw));
+    } catch (err) { /* ignore */ }
+  }
+  function save() {
+    if (!state || !state.name) return;
+    const data = {
+      v: 1,
+      name: state.name, room: state.room, tx: state.tx, ty: state.ty, facing: state.facing,
+      spoke: state.spoke, crew: state.crew, defeated: state.defeated,
+      puzzleDone: state.puzzleDone, trainerDone: state.trainerDone, announced: state.announced,
+      arrivedNote: state.arrivedNote, puzzles: state.puzzles,
+      dojoEarned: state.dojoEarned, earnedOn: state.earnedOn, winIdentified: state.winIdentified,
+      atVictory: state.atVictory, sound: state.sound, readAloud: state.readAloud, lastSlot: state.lastSlot
+    };
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (err) { /* ignore */ }
+    settings.sound = state.sound;
+    settings.readAloud = state.readAloud;
+    saveSettings();
+  }
+  function peekSave() {
+    try { return !!localStorage.getItem(SAVE_KEY); } catch (err) { return false; }
+  }
+  function load() {
+    try {
+      const data = JSON.parse(localStorage.getItem(SAVE_KEY));
+      if (!data || !data.name) return false;
+      state = createState(data.name);
+      ["spoke", "crew", "defeated", "puzzleDone", "trainerDone", "announced", "arrivedNote", "puzzles"].forEach((k) => {
+        if (data[k]) state[k] = data[k];
+      });
+      state.room = data.room || "surface";
+      state.tx = data.tx; state.ty = data.ty; state.facing = data.facing || "down";
+      state.px = state.tx * TILE; state.py = state.ty * TILE;
+      state.dojoEarned = !!data.dojoEarned;
+      state.earnedOn = data.earnedOn || "";
+      state.winIdentified = data.winIdentified || 0;
+      state.atVictory = !!data.atVictory;
+      state.sound = data.sound !== false;
+      state.readAloud = !!data.readAloud;
+      state.lastSlot = typeof data.lastSlot === "number" ? data.lastSlot : -1;
+      const inn = state.puzzles.inner;
+      if (!state.puzzleDone.inner && (!inn || !inn.seq1 || inn.seq1.length !== 4 || !inn.seq2 || inn.seq2.length !== 6)) state.puzzles.inner = freshInner();
+      if (!state.puzzles.mantle || !state.puzzles.mantle.rocks || state.puzzles.mantle.layout !== 3) state.puzzles.mantle = freshPuzzle("mantle");
+      if (!state.puzzles.outer || !state.puzzles.outer.dirs || state.puzzles.outer.layout !== 4) state.puzzles.outer = freshPuzzle("outer");
+      if (!state.puzzles.crust || !state.puzzles.crust.cracks || state.puzzles.crust.layout !== 3) state.puzzles.crust = freshPuzzle("crust");
+      if (terrainBlocks(state.room, state.tx, state.ty) || entityBlocks(state.room, state.tx, state.ty)) {
+        const s = SPAWN[state.room] || SPAWN.surface;
+        state.tx = s.x; state.ty = s.y; state.facing = s.facing;
+        state.px = s.x * TILE; state.py = s.y * TILE;
+      }
+      settings.sound = state.sound;
+      settings.readAloud = state.readAloud;
+      return true;
+    } catch (err) { return false; }
+  }
+
+  function placePlayer(x, y) {
+    state.tx = x; state.ty = y;
+    state.px = x * TILE; state.py = y * TILE;
+    state.moving = false;
+  }
+  function enterRoom(room) {
+    state.room = room;
+    const s = SPAWN[room];
+    placePlayer(s.x, s.y);
+    state.facing = s.facing;
+    state.ride = null;
+    state.falling = false;
+    state.screen = "play";
+    save();
+  }
+  function wipeRoom(room) {
+    if (room === "surface" || room === "boss") {
+      const s = SPAWN[room];
+      placePlayer(s.x, s.y);
+      state.facing = s.facing;
+      save();
+      return;
+    }
+    state.defeated[room] = [];
+    state.puzzleDone[room] = false;
+    state.trainerDone[room] = false;
+    state.announced[room] = false;
+    state.puzzles[room] = freshPuzzle(room);
+    state.memoryWatch = false;
+    const s = SPAWN[room];
+    placePlayer(s.x, s.y);
+    state.facing = "down";
+    save();
+  }
+  function resetJourney(keepDojo) {
+    const name = state.name;
+    const sound = state.sound;
+    const read = state.readAloud;
+    const earned = keepDojo ? state.dojoEarned : false;
+    const earnedOn = keepDojo ? state.earnedOn : "";
+    const winIdentified = keepDojo ? state.winIdentified : 0;
+    state = createState(name);
+    state.sound = sound;
+    state.readAloud = read;
+    state.dojoEarned = earned;
+    state.earnedOn = earnedOn;
+    state.winIdentified = winIdentified;
+    enterRoom("surface");
+    hide("dialogue");
+    hide("battle");
+    hide("wipe");
+    hide("pause");
+    hide("teacher");
+    hide("victory");
+    hide("cert-modal");
+  }
+
+  function show(id) { $(id).hidden = false; }
+  function hide(id) { $(id).hidden = true; }
+  function modalOpen() {
+    return ["dialogue", "battle", "wipe", "pause", "teacher", "confirm", "victory", "cert-modal", "title"].some((id) => !$(id).hidden);
+  }
+  function inputLocked() {
+    if (!state || state.screen !== "play") return true;
+    if (state.ride || state.falling || state.fading || state.memoryWatch) return true;
+    return modalOpen();
+  }
+
+  function openDialogue(lines, cb) {
+    dialogueLines = lines;
+    dialogueIndex = 0;
+    dialogueCb = cb || null;
+    blockAdvance = false;
+    show("dialogue");
+    renderDialogue();
+    sfx("talk");
+  }
+  function renderDialogue() {
+    const text = dialogueLines[dialogueIndex] || "";
+    $("dialogue-text").textContent = text;
+    $("dialogue-next").textContent = dialogueIndex < dialogueLines.length - 1 ? "Next" : "Close";
+    maybeSpeak(text);
+  }
+  function advanceDialogue() {
+    if ($("dialogue").hidden) return;
+    if (dialogueIndex < dialogueLines.length - 1) {
+      dialogueIndex++;
+      renderDialogue();
+      sfx("click");
+    } else {
+      hide("dialogue");
+      const cb = dialogueCb;
+      dialogueCb = null;
+      if (cb) cb();
+    }
+  }
+  function openConfirm(text, onYes) {
+    $("confirm-text").textContent = text;
+    confirmCb = onYes;
+    show("confirm");
+  }
+  function fadeThen(fn) {
+    if (!state) { fn(); return; }
+    state.fading = true;
+    $("fade").classList.add("on");
+    setTimeout(() => {
+      fn();
+      $("fade").classList.remove("on");
+      if (state) state.fading = false;
+    }, 480);
+  }
+
+  function withChoices(q) {
+    let choices = [];
+    let slot = -1;
+    for (let n = 0; n < 12; n++) {
+      choices = shuffle([q.correct].concat(q.wrong));
+      slot = choices.indexOf(q.correct);
+      if (slot !== state.lastSlot) break;
+    }
+    state.lastSlot = slot;
+    return { prompt: q.prompt, correct: q.correct, explain: q.explain, choices: choices, clue: q.clue || "" };
+  }
+  function elementQuestion(elId) {
+    const el = ELEMENTS[elId];
+    const names = Object.keys(ELEMENTS).map((k) => ELEMENTS[k].name).filter((n) => n !== el.name);
+    const wrong = shuffle(names).slice(0, 3);
+    const q = withChoices({ prompt: "Which element is this?", correct: el.name, wrong: wrong, explain: el.fact, clue: el.clue });
+    q.clue = el.clue;
+    q.elementId = elId;
+    return q;
+  }
+  function openBattleUI() {
+    hide("dialogue");
+    show("battle");
+    $("battle-result").hidden = true;
+    $("answers").hidden = false;
+    renderBattle();
+  }
+  function renderPips(el, max, left) {
+    el.innerHTML = "";
+    for (let i = 0; i < max; i++) {
+      const d = document.createElement("div");
+      d.className = "pip" + (i < left ? " on" : "");
+      el.appendChild(d);
+    }
+  }
+  function renderBattle() {
+    const b = state.battle;
+    if (!b) return;
+    const q = b.questions[b.qi];
+    $("battle-progress").textContent = b.kind === "creature" ? "Identify the element" : ("Question " + (b.qi + 1) + " of " + b.questions.length);
+    $("battle-question").textContent = q.prompt;
+    $("battle-clue").textContent = q.clue ? ("Clue: " + q.clue) : "";
+    $("battle-clue").hidden = !q.clue;
+    const buttons = $("answers").querySelectorAll("button");
+    buttons.forEach((btn, i) => {
+      btn.textContent = (i + 1) + ". " + q.choices[i];
+      btn.disabled = b.phase !== "ask";
+    });
+    $("answers").hidden = b.phase === "explain";
+    $("battle-result").hidden = b.phase !== "explain";
+    const playerMax = b.kind === "boss" ? 10 : (b.kind === "trainer" ? 4 : 1);
+    $("player-energy-label").textContent = "Your knowledge energy";
+    $("enemy-energy-label").textContent = b.enemyName + " knowledge energy";
+    renderPips($("player-pips"), playerMax, playerMax);
+    renderPips($("enemy-pips"), b.enemyMax, b.enemyLeft);
+    if (b.phase === "ask") maybeSpeak(q.prompt + (q.clue ? ". Clue. " + q.clue : "") + ". " + q.choices.map((c, i) => (i + 1) + ". " + c).join(". "));
+    drawBattleArt();
+  }
+  function startCreatureBattle(ent) {
+    if (state.battle || defeatedIndex(state.room, ent.i)) return;
+    const elId = state.crew[state.room][ent.i];
+    const q = elementQuestion(elId);
+    state.battle = {
+      kind: "creature", room: state.room, index: ent.i, elementId: elId,
+      questions: [q], qi: 0, enemyMax: 1, enemyLeft: 1, enemyName: LAYER_INFO[state.room].title + " creature",
+      phase: "ask", animT: 0
+    };
+    openBattleUI();
+  }
+  function startTrainerFight() {
+    const room = state.room;
+    const bank = BANKS[room];
+    const questions = ["temp", "depth", "fact", "element"].map((cat) => {
+      const list = bank[cat];
+      return withChoices(list[Math.floor(Math.random() * list.length)]);
+    });
+    state.battle = {
+      kind: "trainer", room: room, questions: questions, qi: 0,
+      enemyMax: 4, enemyLeft: 4, enemyName: LAYER_INFO[room].title + " Trainer",
+      phase: "ask", animT: 0
+    };
+    openBattleUI();
+  }
+  function startBossFight() {
+    const pool = shuffle(BOSS_POOL).slice(0, 10);
+    const questions = pool.map((q) => withChoices(q));
+    state.battle = {
+      kind: "boss", room: "boss", questions: questions, qi: 0,
+      enemyMax: 10, enemyLeft: 10, enemyName: "Core Guardian",
+      phase: "ask", animT: 0
+    };
+    openBattleUI();
+  }
+  function pickAnswer(i) {
+    const b = state.battle;
+    if (!b || b.phase !== "ask") return;
+    const q = b.questions[b.qi];
+    const choice = q.choices[i];
+    if (choice === q.correct) {
+      b.phase = "anim";
+      b.animT = 0;
+      b.enemyLeft = Math.max(0, b.enemyLeft - 1);
+      sfx("attack");
+      sfx("correct");
+      renderBattle();
+    } else {
+      sfx("wrong");
+      const boss = b.kind === "boss";
+      const correct = q.correct;
+      state.battle = null;
+      hide("battle");
+      $("wipe-title").textContent = boss ? "The Core Guardian has returned you to the surface!" : "Your team wiped out!";
+      $("wipe-answer").textContent = "The correct answer was: " + correct;
+      show("wipe");
+      maybeSpeak($("wipe-title").textContent + " " + $("wipe-answer").textContent);
+    }
+  }
+  function showExplain() {
+    const b = state.battle;
+    if (!b) return;
+    const q = b.questions[b.qi];
+    b.phase = "explain";
+    let text = "";
+    if (b.kind === "creature") {
+      const el = ELEMENTS[b.elementId];
+      text = "Yes! This is " + el.name + " (" + el.symbol + ").\n" + el.fact;
+    } else if (b.qi >= b.questions.length - 1 && b.enemyLeft === 0) {
+      text = q.explain + "\n\nYou passed!";
+    } else {
+      text = q.explain + "\n\nA science-energy hit landed. One knowledge point was lost.";
+    }
+    $("battle-result-text").textContent = text;
+    $("battle-continue").textContent = (b.qi >= b.questions.length - 1) ? "Finish" : "Next question";
+    renderBattle();
+    maybeSpeak(text);
+  }
+  function advanceBattleExplain() {
+    const b = state.battle;
+    if (!b || b.phase !== "explain") return;
+    if (b.qi >= b.questions.length - 1) {
+      finishBattle();
+    } else {
+      b.qi++;
+      b.phase = "ask";
+      renderBattle();
+    }
+  }
+  function finishBattle() {
+    const b = state.battle;
+    if (!b) return;
+    const room = b.room;
+    state.battle = null;
+    hide("battle");
+    if (b.kind === "creature") {
+      if (state.defeated[room].indexOf(b.index) === -1) state.defeated[room].push(b.index);
+      save();
+      checkRoomComplete(room);
+    } else if (b.kind === "trainer") {
+      state.trainerDone[room] = true;
+      save();
+      checkRoomComplete(room);
+    } else if (b.kind === "boss") {
+      winGame();
+    }
+  }
+  function acceptWipe() {
+    if ($("wipe").hidden) return;
+    const boss = $("wipe-title").textContent.indexOf("Core Guardian") !== -1;
+    hide("wipe");
+    fadeThen(() => {
+      if (!state) return;
+      if (boss) {
+        resetJourney(true);
+        openDialogue(["You are back at the surface.", "Your name was kept.", "The journey starts again."]);
+      } else {
+        const room = state.room;
+        wipeRoom(room);
+        openDialogue(["You are back at the start of this room.", "Creatures, the puzzle, and the trainer test were reset."]);
+      }
+    });
+  }
+  function checkRoomComplete(room) {
+    if (!state || room === "surface" || room === "boss") return;
+    if (state.announced[room]) return;
+    if (missing(room).length) return;
+    state.announced[room] = true;
+    save();
+    const next = NEXT[room];
+    const line = next === "boss" ? "Ride the escalator to face the Core Guardian." : ("Ride it to the " + LAYER_INFO[next].title + ".");
+    openDialogue([LAYER_INFO[room].title + " complete!", "The downward escalator is unlocked.", line]);
+  }
+  function onPuzzleDone(room) {
+    sfx("success");
+    const lines = {
+      crust: ["Puzzle complete!", "You crossed every crust slab once.", "The floor is solid and the gate is open."],
+      mantle: ["Puzzle complete!", "The exit door is open."],
+      outer: ["The circuit is complete!", "Energy flows to the generator. The exit door is open."],
+      inner: ["Puzzle complete!", "You remembered both patterns. The exit door is open."]
+    };
+    save();
+    openDialogue(lines[room], () => checkRoomComplete(room));
+  }
+  function winGame() {
+    state.dojoEarned = true;
+    if (!state.earnedOn) state.earnedOn = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    state.winIdentified = identifiedCount();
+    state.atVictory = true;
+    state.screen = "victory";
+    sfx("victory");
+    fillVictory();
+    hide("battle");
+    hide("dialogue");
+    show("victory");
+    save();
+  }
+  function fillVictory() {
+    $("vic-name").textContent = "Student: " + state.name;
+    $("vic-score").textContent = "Final-boss score: 10/10";
+    $("vic-creatures").textContent = "Total element creatures identified: " + state.winIdentified;
+  }
+  function fillCertificate() {
+    if (!state) return;
+    $("cert-name").textContent = state.name;
+    $("cert-date").textContent = "Completion date: " + (state.earnedOn || "");
+  }
+  function openCertificate() {
+    if (!state || !state.dojoEarned) {
+      openDialogue(["Finish the journey first.", "The certificate is ready after the Core Guardian is defeated."]);
+      return;
+    }
+    fillCertificate();
+    show("cert-modal");
+  }
+
+  function talkGuide() {
+    const room = state.room;
+    openDialogue(GUIDE[room], () => {
+      if (!state.spoke[room]) {
+        state.spoke[room] = true;
+        save();
+        checkRoomComplete(room);
+      }
+    });
+  }
+  function talkTrainer() {
+    const room = state.room;
+    if (state.trainerDone[room]) {
+      openDialogue(["You already passed my test.", "Ride the escalator when you are ready."]);
+      return;
+    }
+    const need = missing(room).filter((s) => s.indexOf("trainer") === -1);
+    if (need.length) {
+      openDialogue(["Finish these steps first."].concat(need));
+      return;
+    }
+    openDialogue(TRAINER_INTRO[room], startTrainerFight);
+  }
+  function talkBoss() {
+    openDialogue([
+      "I am the Core Guardian.",
+      "I will ask 10 questions from every layer.",
+      "Answer all 10 correctly to finish your mission.",
+      "One wrong answer sends you back to the surface.",
+      "There is no timer."
+    ], startBossFight);
+  }
+  function interact() {
+    if (!state || inputLocked()) return;
+    if (state.room === "outer" && !state.puzzleDone.outer && ARROW_SOL[state.tx + "," + state.ty]) {
+      rotateArrow(state.tx + "," + state.ty);
+      return;
+    }
+    const order = [state.facing, "up", "down", "left", "right"];
+    const spots = [];
+    const seen = {};
+    for (let n = 0; n < order.length; n++) {
+      const dir = order[n];
+      if (seen[dir]) continue;
+      seen[dir] = true;
+      spots.push([state.tx + DIRS[dir].x, state.ty + DIRS[dir].y]);
+    }
+    for (let n = 0; n < spots.length; n++) {
+      const nx = spots[n][0], ny = spots[n][1];
+      const ent = entities(state.room).find((e) => e.x === nx && e.y === ny);
+      if (ent && ent.type === "guide") { talkGuide(); return; }
+      if (ent && ent.type === "trainer") { talkTrainer(); return; }
+      if (ent && ent.type === "guardian") { talkBoss(); return; }
+      if (ent && ent.type === "creature" && !defeatedIndex(state.room, ent.i)) { startCreatureBattle(ent); return; }
+    }
+    const face = DIRS[state.facing];
+    const fx = state.tx + face.x, fy = state.ty + face.y;
+    if (tileAt(state.room, fx, fy) === "^") { tryRideUp(state.tx, state.ty, true); return; }
+    for (let n = 0; n < spots.length; n++) {
+      const nx = spots[n][0], ny = spots[n][1];
+      if (tileAt(state.room, nx, ny) === "v") { tryRide(state.tx, state.ty, true); return; }
+    }
+    if (tileAt(state.room, state.tx, state.ty) === "^") { tryRideUp(state.tx, state.ty, false); return; }
+    if (tileAt(state.room, state.tx, state.ty) === "v") { tryRide(state.tx, state.ty, false); return; }
+    openDialogue(["Nothing to do here.", "Walk up to a character, creature, or escalator."]);
+  }
+  function rotateArrow(key) {
+    const orderDir = ["up", "right", "down", "left"];
+    const cur = state.puzzles.outer.dirs[key];
+    const idx = orderDir.indexOf(cur);
+    state.puzzles.outer.dirs[key] = orderDir[(idx < 0 ? 0 : idx + 1) % 4];
+    sfx("click");
+    if (arrowsSolved()) {
+      state.puzzleDone.outer = true;
+      onPuzzleDone("outer");
+    }
+    save();
+  }
+  function arrowsSolved() {
+    if (!state || !state.puzzles.outer || !state.puzzles.outer.dirs) return false;
+    for (let i = 1; i < FLOW.length - 1; i++) {
+      const key = FLOW[i][0] + "," + FLOW[i][1];
+      const dir = state.puzzles.outer.dirs[key];
+      if (dir !== ARROW_SOL[key]) return false;
+      const nx = FLOW[i][0] + DIRS[dir].x;
+      const ny = FLOW[i][1] + DIRS[dir].y;
+      if (nx !== FLOW[i + 1][0] || ny !== FLOW[i + 1][1]) return false;
+    }
+    return true;
+  }
+  function tryRide(prevX, prevY, fromBeside) {
+    const room = state.room;
+    const onTile = tileAt(room, state.tx, state.ty) === "v";
+    if (!onTile && fromBeside) {
+      /* stand beside and press interact: step is not required */
+    }
+    if (room === "surface" && !state.spoke.surface) {
+      if (onTile) placePlayer(prevX, prevY);
+      openDialogue(["Talk to the guide first."]);
+      return;
+    }
+    if (room !== "surface") {
+      const need = missing(room);
+      if (need.length) {
+        if (onTile) placePlayer(prevX, prevY);
+        openDialogue(["The escalator is locked.", "Still needed:"].concat(need));
+        return;
+      }
+    }
+    const dest = NEXT[room];
+    if (!dest) return;
+    if (!onTile && fromBeside) {
+      state.rideFromSide = true;
+    }
+    startRide(dest);
+  }
+  function tryRideUp(prevX, prevY, fromBeside) {
+    const dest = PREV[state.room];
+    if (!dest) return;
+    const onTile = tileAt(state.room, state.tx, state.ty) === "^";
+    if (!onTile && !fromBeside) return;
+    if (!onTile && fromBeside) state.rideFromSide = true;
+    startRide(dest);
+  }
+  function startRide(to) {
+    state.ride = { to: to, t: 0, dur: 2.1, from: state.room, mid: false };
+    sfx("ride");
+  }
+  function resetMantleRocks() {
+    state.puzzles.mantle.rocks = ROCK_START.map((r) => ({ x: r.x, y: r.y }));
+  }
+  function mantleSolved() {
+    return GOALS.every((g) => state.puzzles.mantle.rocks.some((r) => r.x === g.x && r.y === g.y));
+  }
+  function rockSpaceFree(x, y) {
+    if (!inChamber(x, y)) return false;
+    if (terrainBlocks("mantle", x, y)) return false;
+    if (entityBlocks("mantle", x, y)) return false;
+    if (state.puzzles.mantle.rocks.some((r) => r.x === x && r.y === y)) return false;
+    return true;
+  }
+  function plateAt(x, y) { return PLATES.find((p) => p.x === x && p.y === y) || null; }
+  function resolvePlate(plate) {
+    const pz = state.puzzles.inner;
+    const seq = pz.stage === 1 ? pz.seq1 : pz.seq2;
+    if (plate.id !== seq[pz.step]) {
+      startFall("inner");
+      return;
+    }
+    pz.step++;
+    sfx("ping");
+    if (pz.step >= seq.length) {
+      if (pz.stage === 1) {
+        pz.stage = 2;
+        pz.phase = "idle";
+        pz.step = 0;
+        openDialogue(["You remembered the first pattern!", "Press Watch Pattern for the 6-step pattern."]);
+      } else {
+        state.puzzleDone.inner = true;
+        pz.phase = "done";
+        onPuzzleDone("inner");
+      }
+    }
+    save();
+  }
+  function startFall(room) {
+    state.falling = true;
+    state.fallT = 0;
+    state.fallHandled = false;
+    state.fallingRoom = room;
+    sfx("fall");
+  }
+  function finishFall() {
+    const room = state.fallingRoom;
+    if (room === "crust") state.puzzles.crust = { cracks: {}, layout: 3 };
+    if (room === "inner") state.puzzles.inner = freshInner();
+    state.puzzleDone[room] = false;
+    state.memoryWatch = false;
+    state.falling = false;
+    const s = SPAWN[room];
+    placePlayer(s.x, s.y);
+    state.facing = "down";
+    save();
+    const name = room === "inner" ? "Inner Core" : "Crust";
+    const crack = room === "crust" ? "The crust cracked!" : "The floor cracked!";
+    openDialogue([crack, "You fell to the start of the " + name + ".", "The puzzle was reset."]);
+  }
+  function watchPattern() {
+    if (!state || state.room !== "inner" || state.puzzleDone.inner) return;
+    const pz = state.puzzles.inner;
+    pz.phase = "watch";
+    pz.step = 0;
+    pz.flash = -1;
+    pz.flashT = 0;
+    state.memoryWatch = true;
+    sfx("click");
+  }
+  function resetPuzzleClicked() {
+    if (!state || inputLocked() && !state.memoryWatch) return;
+    const room = state.room;
+    if (state.puzzleDone[room]) return;
+    if (room === "crust") {
+      state.puzzles.crust.cracks = {};
+      if (state.ty >= 11 && state.ty <= 16) placePlayer(6, 11);
+    } else if (room === "mantle") {
+      resetMantleRocks();
+      if (inChamber(state.tx, state.ty) || tileAt(room, state.tx, state.ty) === "D") placePlayer(8, 9);
+    } else if (room === "outer") {
+      state.puzzles.outer.dirs = Object.assign({}, ARROW_START);
+    } else if (room === "inner") {
+      state.puzzles.inner = freshInner();
+      state.memoryWatch = false;
+      if (inChamber(state.tx, state.ty)) placePlayer(8, 9);
+    } else return;
+    sfx("click");
+    save();
+  }
+  function bump() {
+    state.bumpT = 0.16;
+    sfx("bump");
+  }
+  function tryStep(dir) {
+    state.facing = dir;
+    const d = DIRS[dir];
+    const nx = state.tx + d.x;
+    const ny = state.ty + d.y;
+    if (state.room === "mantle" && !state.puzzleDone.mantle) {
+      const rock = rockAt(nx, ny);
+      if (rock) {
+        const bx = nx + d.x, by = ny + d.y;
+        if (rockSpaceFree(bx, by)) {
+          rock.x = bx; rock.y = by;
+          sfx("push");
+          beginMove(nx, ny);
+          if (mantleSolved()) {
+            state.puzzleDone.mantle = true;
+            onPuzzleDone("mantle");
+          }
+          return;
+        }
+        if (state.bumpT <= 0) bump();
+        return;
+      }
+    }
+    if (blocked(state.room, nx, ny)) { if (state.bumpT <= 0) bump(); return; }
+    beginMove(nx, ny);
+  }
+  function beginMove(nx, ny) {
+    state.moving = true;
+    state.moveT = 0;
+    state.fromPx = state.px;
+    state.fromPy = state.py;
+    state.destTx = nx;
+    state.destTy = ny;
+    state.toPx = nx * TILE;
+    state.toPy = ny * TILE;
+    sfx("step");
+  }
+  function onArrive(prevX, prevY) {
+    const room = state.room;
+    const x = state.tx, y = state.ty;
+    if (room === "mantle" && !state.puzzleDone.mantle && inChamber(prevX, prevY) && !inChamber(x, y)) {
+      resetMantleRocks();
+    }
+    if (room === "crust" && tileAt(room, x, y) === "~" && !state.puzzleDone.crust) {
+      const k = x + "," + y;
+      const c = state.puzzles.crust.cracks[k] || 0;
+      if (c >= 1) { startFall("crust"); return; }
+      state.puzzles.crust.cracks[k] = 1;
+      sfx("crack");
+      if (crustAllStepped()) {
+        state.puzzleDone.crust = true;
+        onPuzzleDone("crust");
+        return;
+      }
+    }
+    if (room === "inner" && !state.puzzleDone.inner) {
+      const plate = plateAt(x, y);
+      const pz = state.puzzles.inner;
+      if (plate && pz.phase === "input") {
+        resolvePlate(plate);
+        return;
+      } else if (plate && pz.phase === "idle" && !pz.hinted) {
+        pz.hinted = true;
+        openDialogue(["Press Watch Pattern first.", "Then walk on the plates in that order."]);
+        return;
+      }
+    }
+    if (tileAt(room, x, y) === "^") {
+      tryRideUp(prevX, prevY, false);
+      return;
+    }
+    if (tileAt(room, x, y) === "v") {
+      tryRide(prevX, prevY, false);
+      return;
+    }
+    if (!$("dialogue").hidden || state.falling) return;
+    const near = adjacentCreature();
+    if (near) startCreatureBattle(near);
+    save();
+  }
+  function adjacentCreature() {
+    const pref = [];
+    const face = DIRS[state.facing];
+    pref.push([state.tx + face.x, state.ty + face.y]);
+    [["up"], ["down"], ["left"], ["right"]].forEach((d) => {
+      /* filled below */
+    });
+    const spots = [
+      [state.tx + face.x, state.ty + face.y],
+      [state.tx, state.ty - 1],
+      [state.tx, state.ty + 1],
+      [state.tx - 1, state.ty],
+      [state.tx + 1, state.ty]
+    ];
+    for (let i = 0; i < spots.length; i++) {
+      const ent = entities(state.room).find((e) => e.type === "creature" && e.x === spots[i][0] && e.y === spots[i][1] && !defeatedIndex(state.room, e.i));
+      if (ent) return ent;
+    }
+    return null;
+  }
+  function heldDir() {
+    if (held[lastDir]) return lastDir;
+    const keys = ["up", "down", "left", "right"];
+    for (let i = 0; i < keys.length; i++) if (held[keys[i]]) return keys[i];
+    return null;
+  }
+  function update(dt) {
+    if (!state) return;
+    if (state.screen === "play" && state.room === "outer" && !state.puzzleDone.outer && !state.battle && arrowsSolved()) {
+      state.puzzleDone.outer = true;
+      onPuzzleDone("outer");
+    }
+    state.time += dt;
+    if (state.bumpT > 0) state.bumpT -= dt;
+    if (state.ride) {
+      state.ride.t += dt;
+      const p = state.ride.t / state.ride.dur;
+      if (p >= 0.5 && !state.ride.mid) {
+        state.ride.mid = true;
+        state.room = state.ride.to;
+        const s = SPAWN[state.room];
+        placePlayer(s.x, s.y);
+        state.facing = s.facing;
+      }
+      if (p >= 1) {
+        const room = state.room;
+        const from = state.ride.from;
+        const cameDown = PREV[room] === from;
+        const wentUp = NEXT[room] === from;
+        state.ride = null;
+        if (cameDown && room !== "surface" && room !== "boss") {
+          const dirty = roomDirty(room);
+          wipeRoom(room);
+          state.spoke[room] = false;
+          save();
+          if (dirty) {
+            openDialogue(["This room was reset.", "You are at the start.", "Talk to the guide, then try the room again."]);
+            return;
+          }
+        }
+        save();
+        if (wentUp) {
+          openDialogue(["You rode back to the " + LAYER_INFO[room].title + ".", "Ride the downward escalator to enter the next room again.", "Going back in resets that room."]);
+          return;
+        }
+        if (!state.arrivedNote[room]) {
+          state.arrivedNote[room] = true;
+          if (room === "boss") openDialogue(["You arrived at Earth’s center.", "The upward escalator behind you goes back to the Inner Core.", "Walk up to the Core Guardian."]);
+          else if (GUIDE[room]) openDialogue(["You arrived at the " + LAYER_INFO[room].title + ".", "Talk to the guide.", "The upward escalator goes back to the previous room."]);
+        }
+      }
+      return;
+    }
+    if (state.falling) {
+      state.fallT += dt;
+      if (state.fallT > 0.75 && !state.fallHandled) {
+        state.fallHandled = true;
+        fadeThen(finishFall);
+      }
+      return;
+    }
+    if (state.room === "inner" && state.puzzles.inner && state.puzzles.inner.phase === "watch") {
+      const pz = state.puzzles.inner;
+      const seq = pz.stage === 1 ? pz.seq1 : pz.seq2;
+      pz.flashT += dt;
+      const idx = Math.floor(pz.flashT / 1.15);
+      if (idx !== pz.flash) {
+        pz.flash = idx;
+        if (idx >= seq.length) {
+          pz.phase = "input";
+          pz.step = 0;
+          pz.flash = -1;
+          state.memoryWatch = false;
+        } else {
+          tone([523, 659, 784, 988][seq[idx]], 0.12, "sine", 0.05);
+          if (state.readAloud) speak(PLATES[seq[idx]].name);
+        }
+      }
+    }
+    if (state.battle && state.battle.phase === "anim") {
+      state.battle.animT += dt;
+      if (state.battle.animT > 0.65) showExplain();
+    }
+    if (!inputLocked() && !state.moving) {
+      const dir = heldDir();
+      if (dir) tryStep(dir);
+    }
+    if (state.moving) {
+      state.moveT += dt;
+      state.walkT += dt;
+      const u = Math.min(1, state.moveT / 0.14);
+      state.px = state.fromPx + (state.toPx - state.fromPx) * u;
+      state.py = state.fromPy + (state.toPy - state.fromPy) * u;
+      if (u >= 1) {
+        const prevX = state.tx, prevY = state.ty;
+        state.moving = false;
+        state.tx = state.destTx;
+        state.ty = state.destTy;
+        state.px = state.tx * TILE;
+        state.py = state.ty * TILE;
+        onArrive(prevX, prevY);
+      }
+    }
+  }
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const stage = $("stage");
+    viewW = stage.clientWidth;
+    viewH = stage.clientHeight;
+    canvas.width = Math.max(1, Math.floor(viewW * dpr));
+    canvas.height = Math.max(1, Math.floor(viewH * dpr));
+  }
+  function cameraFor(room, px, py) {
+    const g = MAPS[room];
+    const mapW = g[0].length * TILE;
+    const mapH = g.length * TILE;
+    let x = px + TILE / 2 - viewW / 2;
+    let y = py + TILE / 2 - viewH * 0.42;
+    if (mapW <= viewW) x = (mapW - viewW) / 2;
+    else x = Math.max(0, Math.min(mapW - viewW, x));
+    if (mapH <= viewH) y = (mapH - viewH) / 2;
+    else y = Math.max(0, Math.min(mapH - viewH, y));
+    if (state && state.bumpT > 0 && !reduceMotion) x += Math.sin(state.time * 40) * 3;
+    return { x: Math.round(x), y: Math.round(y) };
+  }
+  function floorColor(room, x, y) {
+    const pal = {
+      surface: ["#3c8f46", "#469652"],
+      crust: ["#8a6844", "#977250"],
+      mantle: ["#7a3024", "#8c3d2e"],
+      outer: ["#c85a14", "#e07a22"],
+      inner: ["#e2a83a", "#f0c15a"],
+      boss: ["#f6e7a1", "#efd56a"]
+    };
+    const pair = pal[room] || pal.crust;
+    return pair[(x + y) % 2];
+  }
+  function wallColor(room) {
+    return { surface: "#2f5d34", crust: "#5a4636", mantle: "#4a1c16", outer: "#7a320c", inner: "#a86412", boss: "#d8b44a" }[room] || "#333";
+  }
+  function drawWall(room, X, Y) {
+    ctx.fillStyle = wallColor(room);
+    ctx.fillRect(X, Y, TILE, TILE);
+    if (room === "crust") {
+      ctx.fillStyle = "#6e5438";
+      ctx.fillRect(X, Y + 6, TILE, 7);
+      ctx.fillStyle = "#3e2e22";
+      ctx.fillRect(X, Y + 20, TILE, 6);
+      ctx.fillStyle = "#c4a070";
+      ctx.fillRect(X + 8, Y + 32, 14, 5);
+    } else if (room === "mantle") {
+      ctx.fillStyle = "#ff6a1a";
+      ctx.fillRect(X + 6, Y + 8, 7, 22);
+      ctx.fillRect(X + 30, Y + 14, 6, 16);
+      ctx.fillStyle = "#2a0c08";
+      ctx.fillRect(X, Y, TILE, 5);
+    } else if (room === "outer") {
+      ctx.fillStyle = "#ffb020";
+      ctx.fillRect(X, Y + 18, TILE, 5);
+      ctx.fillStyle = "#5a2008";
+      ctx.beginPath(); ctx.arc(X + 24, Y + 28, 8, 0, Math.PI * 2); ctx.fill();
+    } else if (room === "inner") {
+      ctx.fillStyle = "#fff4c8";
+      ctx.fillRect(X + 10, Y + 10, TILE - 20, TILE - 20);
+      ctx.strokeStyle = "#a87820";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(X + 8, Y + 8, TILE - 16, TILE - 16);
+    } else if (room === "boss") {
+      ctx.fillStyle = "#fff8dc";
+      ctx.fillRect(X + 8, Y + 8, 8, 8);
+      ctx.fillRect(X + 30, Y + 28, 8, 8);
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fillRect(X + 4, Y + 4, 10, 6);
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.fillRect(X, Y + TILE - 6, TILE, 6);
+    }
+  }
+  function drawFloorDetail(room, x, y, X, Y) {
+    const t = state ? state.time : 0;
+    if (room === "surface") {
+      ctx.fillStyle = "rgba(20,90,30,0.4)";
+      ctx.fillRect(X + 10, Y + 30, 3, 8);
+      ctx.fillRect(X + 18, Y + 26, 3, 12);
+      ctx.fillRect(X + 30, Y + 32, 3, 6);
+    } else if (room === "crust") {
+      ctx.fillStyle = "rgba(70,48,28,0.4)";
+      ctx.fillRect(X + 8 + (x % 3) * 5, Y + 14 + (y % 2) * 8, 6, 4);
+      ctx.fillStyle = "rgba(220,190,150,0.35)";
+      ctx.beginPath(); ctx.arc(X + 32, Y + 34, 3, 0, Math.PI * 2); ctx.fill();
+    } else if (room === "mantle") {
+      ctx.strokeStyle = "rgba(255,150,40,0.7)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(X + 4, Y + 18);
+      ctx.lineTo(X + 18, Y + 30);
+      ctx.lineTo(X + 42, Y + 14);
+      ctx.stroke();
+      if (!reduceMotion) {
+        ctx.fillStyle = "rgba(255,70,0," + (0.12 + Math.sin(t * 3 + x + y) * 0.08) + ")";
+        ctx.fillRect(X, Y, TILE, TILE);
+      }
+    } else if (room === "outer") {
+      const shift = reduceMotion ? 8 : (t * 28 + x * 5) % TILE;
+      ctx.fillStyle = "rgba(255,220,90,0.35)";
+      ctx.fillRect(X, Y + shift, TILE, 7);
+      ctx.fillStyle = "rgba(90,30,0,0.28)";
+      ctx.beginPath(); ctx.ellipse(X + 24, Y + 22, 12, 5, 0.5, 0, Math.PI * 2); ctx.fill();
+    } else if (room === "inner") {
+      ctx.strokeStyle = "rgba(255,255,230,0.4)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(X + 10, Y + 10, TILE - 20, TILE - 20);
+      ctx.beginPath();
+      ctx.moveTo(X + 24, Y + 6); ctx.lineTo(X + 24, Y + 42);
+      ctx.moveTo(X + 6, Y + 24); ctx.lineTo(X + 42, Y + 24);
+      ctx.stroke();
+    } else if (room === "boss") {
+      ctx.strokeStyle = "rgba(255,255,255,0.28)";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(X + 24, Y + 24, 14, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  function drawTile(room, x, y) {
+    const ch = tileAt(room, x, y);
+    const X = x * TILE, Y = y * TILE;
+    if (ch === "#") {
+      drawWall(room, X, Y);
+      return;
+    }
+    if (ch === "*") {
+      ctx.fillStyle = floorColor(room, x, y);
+      ctx.fillRect(X, Y, TILE, TILE);
+      ctx.fillStyle = "#1e6b32";
+      ctx.beginPath(); ctx.arc(X + 24, Y + 26, 16, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#6b4423";
+      ctx.fillRect(X + 20, Y + 30, 8, 12);
+      return;
+    }
+    ctx.fillStyle = floorColor(room, x, y);
+    ctx.fillRect(X, Y, TILE, TILE);
+    if (ch !== "=" && ch !== "s" && ch !== "~") drawFloorDetail(room, x, y, X, Y);
+    if (ch === "=" || ch === "s") {
+      ctx.fillStyle = ch === "s" ? "#c4a574" : "#d9c4a0";
+      ctx.fillRect(X + 4, Y + 4, TILE - 8, TILE - 8);
+      ctx.strokeStyle = "#6b5434";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(X + 6, Y + 6, TILE - 12, TILE - 12);
+    }
+    if (ch === "~") {
+      const solid = state && room === "crust" && state.puzzleDone.crust;
+      if (!solid) {
+        const cracked = state && room === "crust" && state.puzzles.crust.cracks[x + "," + y];
+        ctx.fillStyle = cracked ? "#6d5338" : "#e4d2b0";
+        ctx.fillRect(X + 3, Y + 3, TILE - 6, TILE - 6);
+        ctx.strokeStyle = cracked ? "#24160e" : "#8b6b45";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(X + 6, Y + 6, TILE - 12, TILE - 12);
+        ctx.beginPath();
+        ctx.moveTo(X + 10, Y + 14); ctx.lineTo(X + 24, Y + 28); ctx.lineTo(X + 36, Y + 16);
+        if (cracked) ctx.lineTo(X + 20, Y + 38);
+        ctx.stroke();
+      } else drawFloorDetail(room, x, y, X, Y);
+    }
+    if (ch === "G") {
+      const open = state && state.puzzleDone.crust;
+      if (open) {
+        ctx.fillStyle = "#16351f";
+        ctx.fillRect(X + 6, Y + 4, TILE - 12, TILE - 8);
+        ctx.fillStyle = "#7dffb3";
+        ctx.fillRect(X + 8, Y + 8, 6, 6);
+        ctx.fillRect(X + TILE - 14, Y + 8, 6, 6);
+      } else {
+        ctx.fillStyle = "#1b1f2a";
+        ctx.fillRect(X + 6, Y + 4, TILE - 12, TILE - 8);
+        ctx.fillStyle = "#ffd1d1";
+        for (let i = 0; i < 4; i++) ctx.fillRect(X + 10, Y + 8 + i * 8, TILE - 20, 3);
+        ctx.font = "700 11px Verdana";
+        ctx.fillText("GATE", X + 6, Y + 28);
+      }
+    }
+    if (ch === "^" || ch === "v") {
+      const locked = ch === "v" && room !== "surface" && state && missing(room).length > 0;
+      ctx.fillStyle = locked ? "#3c4250" : "#222834";
+      ctx.fillRect(X + 2, Y + 2, TILE - 4, TILE - 4);
+      const shift = reduceMotion ? 0 : (state ? state.time * 36 : 0) % 14;
+      for (let i = 0; i < 4; i++) {
+        ctx.fillStyle = locked ? "#9aa" : "#e7eef8";
+        const yy = Y + 6 + ((i * 12 + shift) % (TILE - 14));
+        ctx.fillRect(X + 8, yy, TILE - 16, 4);
+      }
+      if (locked) {
+        ctx.fillStyle = "#ffd1d1";
+        ctx.font = "700 11px Verdana";
+        ctx.fillText("LOCK", X + 8, Y + 28);
+      } else if (ch === "^") {
+        ctx.fillStyle = "#ffe56a";
+        ctx.font = "700 12px Verdana";
+        ctx.fillText("UP", X + 14, Y + 28);
+      }
+    }
+    if (ch === "D") {
+      const open = state && state.puzzleDone[room];
+      if (open) {
+        ctx.fillStyle = "#16351f";
+        ctx.fillRect(X + 6, Y + 4, TILE - 12, TILE - 8);
+        ctx.fillStyle = "#7dffb3";
+        ctx.fillRect(X + 8, Y + 8, 6, 6);
+        ctx.fillRect(X + TILE - 14, Y + 8, 6, 6);
+      } else {
+        ctx.fillStyle = "#1b1f2a";
+        ctx.fillRect(X + 6, Y + 4, TILE - 12, TILE - 8);
+        ctx.fillStyle = "#d0d5df";
+        for (let i = 0; i < 4; i++) ctx.fillRect(X + 10, Y + 8 + i * 8, TILE - 20, 3);
+      }
+    }
+  }
+  function drawRocks(room) {
+    if (room !== "mantle" || !state) return;
+    state.puzzles.mantle.rocks.forEach((r) => {
+      const X = r.x * TILE, Y = r.y * TILE;
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.beginPath(); ctx.ellipse(X + 24, Y + 38, 14, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#6e5344";
+      ctx.beginPath(); ctx.arc(X + 24, Y + 24, 14, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(255,140,40,0.9)";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(X + 24, Y + 24, 16, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = "#ffd27a";
+      ctx.beginPath(); ctx.arc(X + 18, Y + 18, 5, 0, Math.PI * 2); ctx.fill();
+    });
+    if (room === "mantle") {
+      GOALS.forEach((g) => {
+        const X = g.x * TILE, Y = g.y * TILE;
+        ctx.strokeStyle = "#ffe56a";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(X + 24, Y + 24, 12, 0, Math.PI * 2); ctx.stroke();
+      });
+    }
+  }
+  function drawPillars(room) {
+    if (room !== "mantle") return;
+    PILLARS.forEach((p) => {
+      const X = p.x * TILE, Y = p.y * TILE;
+      ctx.fillStyle = "#2a100c";
+      ctx.fillRect(X + 8, Y, TILE - 16, TILE);
+      ctx.fillStyle = "#6a4034";
+      ctx.fillRect(X + 14, Y + 6, 8, TILE - 12);
+    });
+  }
+  function drawGoalsUnder(room) {
+    if (room !== "mantle") return;
+    GOALS.forEach((g) => {
+      const X = g.x * TILE, Y = g.y * TILE;
+      ctx.fillStyle = "rgba(255, 214, 90, 0.35)";
+      ctx.beginPath(); ctx.arc(X + 24, Y + 24, 14, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+  function drawPlates(room) {
+    if (room !== "inner") return;
+    const pz = state && state.puzzles.inner;
+    const seq = pz ? (pz.stage === 1 ? pz.seq1 : pz.seq2) : null;
+    const flashId = pz && pz.phase === "watch" && pz.flash >= 0 && seq ? seq[pz.flash] : -1;
+    PLATES.forEach((p) => {
+      const X = p.x * TILE, Y = p.y * TILE;
+      ctx.fillStyle = flashId === p.id ? "#fffef4" : "#f0d48a";
+      ctx.beginPath();
+      ctx.moveTo(X + 24, Y + 4); ctx.lineTo(X + 44, Y + 24); ctx.lineTo(X + 24, Y + 44); ctx.lineTo(X + 4, Y + 24);
+      ctx.fill();
+      ctx.fillStyle = flashId === p.id ? "#1a1203" : "#6a4a10";
+      ctx.font = "700 16px Verdana";
+      ctx.fillText(p.glyph, X + 16, Y + 28);
+      ctx.font = "700 9px Verdana";
+      ctx.fillText(p.name, X + 6, Y + 42);
+    });
+  }
+  function drawArrows(room) {
+    if (room !== "outer" || !state) return;
+    const dirs = state.puzzles.outer.dirs;
+    const done = !!state.puzzleDone.outer;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = done ? "rgba(140,255,120,0.85)" : "rgba(255,210,80,0.55)";
+    ctx.lineWidth = 14;
+    ctx.beginPath();
+    FLOW.forEach((p, i) => {
+      const cx = p[0] * TILE + 24, cy = p[1] * TILE + 24;
+      if (i === 0) ctx.moveTo(cx, cy);
+      else ctx.lineTo(cx, cy);
+    });
+    ctx.stroke();
+    ctx.strokeStyle = done ? "rgba(220,255,180,0.9)" : "rgba(255,240,160,0.35)";
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    Object.keys(ARROW_SOL).forEach((k) => {
+      const xy = k.split(",").map(Number);
+      const X = xy[0] * TILE, Y = xy[1] * TILE;
+      const dir = dirs[k];
+      const correct = dir === ARROW_SOL[k];
+      ctx.fillStyle = correct ? "#1f4a28" : "#3a2208";
+      ctx.beginPath(); ctx.arc(X + 24, Y + 24, 18, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = correct ? "#7dffb3" : "#ffe56a";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = correct ? "#b8ffd0" : "#d7f4ff";
+      ctx.save();
+      ctx.translate(X + 24, Y + 24);
+      const rot = { up: -Math.PI / 2, right: 0, down: Math.PI / 2, left: Math.PI }[dir];
+      ctx.rotate(rot);
+      ctx.fillRect(0, -4, 12, 8);
+      ctx.beginPath(); ctx.moveTo(10, -8); ctx.lineTo(18, 0); ctx.lineTo(10, 8); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = "#ffe56a";
+      ctx.font = "700 12px Verdana";
+      ctx.fillText(String(ARROW_NUM[k]), X + 8, Y + 16);
+    });
+    if (done) {
+      const t = state.time;
+      FLOW.forEach((p, i) => {
+        const pulse = (t * 2 + i * 0.2) % 1;
+        ctx.fillStyle = "rgba(180,255,120," + (0.35 + pulse * 0.5) + ")";
+        ctx.beginPath();
+        ctx.arc(p[0] * TILE + 24, p[1] * TILE + 24, 6 + pulse * 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  }
+  function drawPerson(px, py, facing, kind, bob) {
+    const x = px + 10, y = py + 8 + bob;
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath(); ctx.ellipse(px + 24, py + 42, 12, 5, 0, 0, Math.PI * 2); ctx.fill();
+    const suit = kind === "trainer" ? "#2f6fed" : kind === "guide" ? "#e07a20" : "#1aa6a6";
+    ctx.fillStyle = "#222";
+    ctx.fillRect(x + 4, y + 22, 6, 8);
+    ctx.fillRect(x + 16, y + 22, 6, 8);
+    ctx.fillStyle = suit;
+    ctx.fillRect(x + 4, y + 12, 18, 14);
+    ctx.fillStyle = "#f2d2b0";
+    ctx.fillRect(x + 7, y + 4, 12, 10);
+    ctx.fillStyle = kind === "guide" ? "#ffe56a" : kind === "trainer" ? "#d7e4ff" : "#f4f7fb";
+    ctx.fillRect(x + 5, y + 1, 16, 6);
+    ctx.fillStyle = "#142";
+    const eye = facing === "left" ? 8 : facing === "right" ? 12 : 10;
+    ctx.fillRect(x + eye, y + 7, 3, 3);
+    if (facing === "up") ctx.fillRect(x + 8, y + 6, 8, 2);
+    if (kind === "player") {
+      ctx.fillStyle = "#6b4423";
+      ctx.fillRect(x + 18, y + 12, 5, 10);
+    }
+  }
+  function drawCreature(px, py, elId, defeated, bob, room) {
+    const el = ELEMENTS[elId] || ELEMENTS.Fe;
+    const x = px + 24, y = py + 24 + bob;
+    if (defeated) {
+      ctx.fillStyle = "#b6ff9a";
+      ctx.font = "700 16px Verdana";
+      ctx.fillText("✓", px + 28, py + 16);
+      return;
+    }
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath(); ctx.ellipse(x, py + 42, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = el.color;
+    if (room === "mantle") {
+      ctx.beginPath();
+      ctx.moveTo(x, y - 16); ctx.lineTo(x + 14, y + 12); ctx.lineTo(x - 14, y + 12); ctx.fill();
+      ctx.fillStyle = "#ffd27a";
+      ctx.beginPath();
+      ctx.moveTo(x, y - 6); ctx.lineTo(x + 7, y + 10); ctx.lineTo(x - 7, y + 10); ctx.fill();
+    } else if (room === "outer") {
+      ctx.beginPath(); ctx.ellipse(x, y + 2, 16, 10, -0.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#fff6c8";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, y + 2, 7, 0.4, 2.6); ctx.stroke();
+    } else if (room === "inner") {
+      ctx.beginPath();
+      ctx.moveTo(x, y - 16); ctx.lineTo(x + 12, y); ctx.lineTo(x, y + 14); ctx.lineTo(x - 12, y); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.beginPath();
+      ctx.moveTo(x, y - 16); ctx.lineTo(x + 12, y); ctx.lineTo(x, y); ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x - 14, y + 10);
+      ctx.lineTo(x - 8, y - 12);
+      ctx.lineTo(x + 2, y - 2);
+      ctx.lineTo(x + 14, y - 10);
+      ctx.lineTo(x + 10, y + 12);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#142033";
+    ctx.fillRect(x - 6, y - 1, 3, 3);
+    ctx.fillRect(x + 3, y - 1, 3, 3);
+    ctx.font = "700 11px Verdana";
+    ctx.fillText(el.symbol, x - (el.symbol.length > 1 ? 8 : 4), y + 12);
+  }
+  function drawMachine(ent) {
+    const X = ent.x * TILE, Y = ent.y * TILE;
+    ctx.fillStyle = ent.kind === "source" ? "#16351f" : "#3a2a08";
+    ctx.fillRect(X + 6, Y + 8, TILE - 12, TILE - 16);
+    ctx.fillStyle = ent.kind === "source" ? "#7dffb3" : "#ffe56a";
+    ctx.beginPath(); ctx.arc(X + 24, Y + 22, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = "700 9px Verdana";
+    ctx.fillText(ent.kind === "source" ? "START" : "END", X + 8, Y + 42);
+  }
+  function drawGuardian(px, py, bob) {
+    const x = px + 24, y = py + 28 + bob;
+    ctx.fillStyle = "rgba(255,220,120,0.35)";
+    ctx.beginPath(); ctx.arc(x, y, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff6d0";
+    ctx.beginPath(); ctx.moveTo(x, y - 22); ctx.lineTo(x + 16, y + 8); ctx.lineTo(x - 16, y + 8); ctx.fill();
+    ctx.fillStyle = "#f2c14e";
+    ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 18, y + 18); ctx.lineTo(x - 18, y + 18); ctx.fill();
+    ctx.fillStyle = "#1a1203";
+    ctx.fillRect(x - 6, y + 2, 3, 3);
+    ctx.fillRect(x + 3, y + 2, 3, 3);
+  }
+  function drawWorld(room, px, py, facing, moving) {
+    const cam = cameraFor(room, px, py);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = floorColor(room, 0, 0);
+    ctx.fillRect(0, 0, viewW, viewH);
+    ctx.save();
+    ctx.translate(-cam.x, -cam.y);
+    const g = MAPS[room];
+    for (let y = 0; y < g.length; y++) for (let x = 0; x < g[0].length; x++) drawTile(room, x, y);
+    drawPillars(room);
+    drawGoalsUnder(room);
+    drawPlates(room);
+    drawArrows(room);
+    entities(room).forEach((e) => {
+      if (e.type === "machine") drawMachine(e);
+    });
+    drawRocks(room);
+    const bob = reduceMotion ? 0 : Math.sin((state ? state.time : 0) * 3) * 1.5;
+    entities(room).forEach((e) => {
+      if (e.type === "creature") {
+        const id = state && state.crew[room] ? state.crew[room][e.i] : "Fe";
+        const gone = state && defeatedIndex(room, e.i);
+        drawCreature(e.x * TILE, e.y * TILE, id, gone, bob, room);
+      } else if (e.type === "guide") drawPerson(e.x * TILE, e.y * TILE, "down", "guide", 0);
+      else if (e.type === "trainer") drawPerson(e.x * TILE, e.y * TILE, "down", "trainer", 0);
+      else if (e.type === "guardian") drawGuardian(e.x * TILE, e.y * TILE, bob);
+    });
+    if (room === "inner") {
+      const pz = state && state.puzzles.inner;
+      const seq = pz ? (pz.stage === 1 ? pz.seq1 : pz.seq2) : null;
+      const flashId = pz && pz.phase === "watch" && pz.flash >= 0 && seq ? seq[pz.flash] : -1;
+      PLATES.forEach((p) => {
+        const X = p.x * TILE, Y = p.y * TILE;
+        if (flashId === p.id) {
+          ctx.strokeStyle = "#fff";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(X + 2, Y + 2, TILE - 4, TILE - 4);
+        }
+        ctx.fillStyle = "#1a1203";
+        ctx.font = "700 9px Verdana";
+        ctx.fillText(p.name, X + 4, Y + 44);
+      });
+    }
+    if (px != null) {
+      const walkBob = moving && !reduceMotion ? Math.sin(state.walkT * 18) * 2 : 0;
+      const fallDrop = state && state.falling ? state.fallT * 26 : 0;
+      ctx.save();
+      if (state && state.falling) ctx.globalAlpha = Math.max(0, 1 - state.fallT);
+      drawPerson(px, py + fallDrop, facing, "player", walkBob);
+      ctx.restore();
+    }
+    drawHighlights(room, px, py);
+    ctx.restore();
+    if (state && state.ride) {
+      const p = state.ride.t / state.ride.dur;
+      const dark = Math.sin(Math.min(1, p) * Math.PI);
+      ctx.fillStyle = "rgba(0,0,0," + (dark * 0.72) + ")";
+      ctx.fillRect(0, 0, viewW, viewH);
+      const heat = { crust: "90,50,20", mantle: "180,50,0", outer: "220,70,0", inner: "240,40,0", boss: "255,200,80" }[state.ride.to] || "255,120,0";
+      ctx.fillStyle = "rgba(" + heat + "," + (dark * 0.45) + ")";
+      ctx.fillRect(0, 0, viewW, viewH);
+      if (dark > 0.45) {
+        ctx.fillStyle = "#fff";
+        ctx.font = "700 28px Verdana";
+        ctx.textAlign = "center";
+        ctx.fillText("Going deeper...", viewW / 2, viewH / 2);
+        ctx.textAlign = "left";
+      }
+    }
+    const tint = { mantle: "rgba(120,20,0,0.12)", outer: "rgba(180,40,0,0.16)", inner: "rgba(255,80,0,0.14)", boss: "rgba(255,200,80,0.12)" }[room];
+    if (tint && !(state && state.ride)) {
+      ctx.fillStyle = tint;
+      ctx.fillRect(0, 0, viewW, viewH);
+    }
+  }
+  function drawHighlights(room, px, py) {
+    if (px == null || !state) return;
+    const tx = Math.round(px / TILE), ty = Math.round(py / TILE);
+    const pulse = 0.45 + Math.sin(state.time * 5) * 0.25;
+    entities(room).forEach((e) => {
+      let show = false;
+      if (e.type === "guide" || e.type === "trainer" || e.type === "guardian" || e.type === "machine") show = true;
+      if (e.type === "creature" && !defeatedIndex(room, e.i)) show = true;
+      if (!show) return;
+      ctx.strokeStyle = "rgba(255,229,106," + pulse + ")";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(e.x * TILE + 3, e.y * TILE + 3, TILE - 6, TILE - 6);
+      if (Math.abs(e.x - tx) + Math.abs(e.y - ty) === 1) drawPrompt(e.x, e.y);
+    });
+    const g = MAPS[room];
+    for (let y = 0; y < g.length; y++) for (let x = 0; x < g[0].length; x++) {
+      if (g[y][x] === "v" || g[y][x] === "^" || g[y][x] === "G") {
+        ctx.strokeStyle = "rgba(126,255,179," + pulse + ")";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x * TILE + 2, y * TILE + 2, TILE - 4, TILE - 4);
+        if (Math.abs(x - tx) + Math.abs(y - ty) <= 1) drawPrompt(x, y);
+      }
+    }
+    if (room === "outer" && ARROW_SOL[tx + "," + ty]) drawPrompt(tx, ty);
+  }
+  function drawPrompt(x, y) {
+    const bob = reduceMotion ? 0 : Math.sin(state.time * 6) * 3;
+    ctx.fillStyle = "#ffe56a";
+    ctx.fillRect(x * TILE + 16, y * TILE - 16 + bob, 16, 16);
+    ctx.fillStyle = "#1a1203";
+    ctx.font = "700 12px Verdana";
+    ctx.fillText("E", x * TILE + 19, y * TILE - 4 + bob);
+  }
+  function drawBattleArt() {
+    const b = state.battle;
+    if (!b) return;
+    const w = bcanvas.width, h = bcanvas.height;
+    bctx.setTransform(1, 0, 0, 1, 0, 0);
+    const battleBg = { crust: "#4a3424", mantle: "#5a180e", outer: "#7a320c", inner: "#8a6420", boss: "#4a3c12" }[b.room] || "#07101c";
+    bctx.fillStyle = battleBg;
+    bctx.fillRect(0, 0, w, h);
+    bctx.fillStyle = "rgba(0,0,0,0.35)";
+    bctx.fillRect(0, h - 36, w, 36);
+    drawBattleActor(bctx, 90, 78, "player");
+    if (b.kind === "creature") drawBattleBlob(bctx, 470, 90, b.elementId, b.room);
+    else if (b.kind === "trainer") drawBattleActor(bctx, 470, 78, "trainer");
+    else drawBattleGuardian(bctx, 480, 100);
+    if (b.phase === "anim" || (b.phase === "explain" && b.animT > 0)) {
+      const u = Math.min(1, b.phase === "anim" ? b.animT / 0.65 : 1);
+      bctx.strokeStyle = "#d6ff75";
+      bctx.lineWidth = 6;
+      bctx.beginPath();
+      bctx.moveTo(140, 90);
+      bctx.lineTo(140 + 280 * u, 90 - Math.sin(u * 12) * 10);
+      bctx.stroke();
+    }
+  }
+  function drawBattleActor(c, x, y, kind) {
+    c.fillStyle = kind === "trainer" ? "#2f6fed" : "#1aa6a6";
+    c.fillRect(x, y, 48, 40);
+    c.fillStyle = "#f2d2b0";
+    c.fillRect(x + 12, y - 22, 24, 22);
+    c.fillStyle = "#fff";
+    c.fillRect(x + 8, y - 30, 32, 12);
+    c.fillStyle = "#142";
+    c.fillRect(x + 16, y - 16, 5, 5);
+    c.fillRect(x + 26, y - 16, 5, 5);
+  }
+  function drawBattleBlob(c, x, y, elId, room) {
+    const el = ELEMENTS[elId];
+    c.fillStyle = el.color;
+    if (room === "mantle") {
+      c.beginPath(); c.moveTo(x, y - 58); c.lineTo(x + 48, y + 36); c.lineTo(x - 48, y + 36); c.fill();
+      c.fillStyle = "#ffd27a";
+      c.beginPath(); c.moveTo(x, y - 24); c.lineTo(x + 22, y + 30); c.lineTo(x - 22, y + 30); c.fill();
+    } else if (room === "outer") {
+      c.beginPath(); c.ellipse(x, y, 54, 32, -0.4, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = "#fff6c8";
+      c.lineWidth = 4;
+      c.beginPath(); c.arc(x, y, 22, 0.3, 2.5); c.stroke();
+    } else if (room === "inner") {
+      c.beginPath(); c.moveTo(x, y - 52); c.lineTo(x + 40, y); c.lineTo(x, y + 48); c.lineTo(x - 40, y); c.fill();
+      c.fillStyle = "rgba(255,255,255,0.4)";
+      c.beginPath(); c.moveTo(x, y - 52); c.lineTo(x + 40, y); c.lineTo(x, y); c.fill();
+    } else {
+      c.beginPath();
+      c.moveTo(x - 46, y + 30); c.lineTo(x - 24, y - 40); c.lineTo(x + 6, y - 8); c.lineTo(x + 46, y - 34); c.lineTo(x + 30, y + 36); c.fill();
+    }
+    c.fillStyle = "#142033";
+    c.fillRect(x - 16, y - 6, 8, 8);
+    c.fillRect(x + 8, y - 6, 8, 8);
+    c.font = "700 28px Verdana";
+    c.fillText(el.symbol, x - 16, y + 28);
+  }
+  function drawBattleGuardian(c, x, y) {
+    c.fillStyle = "#fff1b8";
+    c.beginPath(); c.moveTo(x, y - 70); c.lineTo(x + 50, y + 20); c.lineTo(x - 50, y + 20); c.fill();
+    c.fillStyle = "#f2c14e";
+    c.beginPath(); c.moveTo(x, y - 20); c.lineTo(x + 58, y + 46); c.lineTo(x - 58, y + 46); c.fill();
+    c.fillStyle = "#1a1203";
+    c.fillRect(x - 16, y + 4, 8, 8);
+    c.fillRect(x + 8, y + 4, 8, 8);
+  }
+
+  function syncHud() {
+    const playing = state && state.screen === "play" && $("victory").hidden && $("title").hidden;
+    if (!playing) {
+      $("hud").hidden = true;
+      $("touch").hidden = true;
+      $("puzzle-tools").hidden = true;
+      $("memory-banner").hidden = true;
+      return;
+    }
+    $("hud").hidden = false;
+    $("touch").hidden = false;
+    const room = state.room;
+    const info = LAYER_INFO[room];
+    $("hud-name").textContent = state.name;
+    $("hud-layer").textContent = "Layer: " + info.title;
+    $("hud-depth-value").textContent = info.depth;
+    $("hud-temp-value").textContent = info.temp;
+    if (room === "surface" || room === "boss") {
+      $("hud-creatures").textContent = "Element battles: —";
+      $("hud-puzzle").textContent = "Puzzle: —";
+      $("hud-trainer").textContent = room === "boss" ? "Trainer: Final boss" : "Trainer: —";
+    } else {
+      $("hud-creatures").textContent = "Element battles: " + state.defeated[room].length + "/" + state.crew[room].length;
+      $("hud-puzzle").textContent = "Puzzle: " + (state.puzzleDone[room] ? "Complete" : "Not yet");
+      $("hud-trainer").textContent = "Trainer: " + (state.trainerDone[room] ? "Passed" : "Not yet");
+    }
+    let next = "Explore";
+    if (room === "surface") next = state.spoke.surface ? "Next: Ride the escalator down" : "Next: Talk to the guide";
+    else if (room === "boss") next = "Next: Talk to the Core Guardian";
+    else {
+      const need = missing(room);
+      next = need.length ? ("Next: " + need[0]) : "Next: Ride the escalator down";
+    }
+    $("hud-next").textContent = next;
+    $("btn-sound").textContent = state.sound ? "Sound: On" : "Sound: Off";
+    $("btn-read").textContent = state.readAloud ? "Read: On" : "Read: Off";
+    const puzzleRoom = room === "crust" || room === "mantle" || room === "outer" || room === "inner";
+    $("puzzle-tools").hidden = !puzzleRoom || !!state.puzzleDone[room];
+    $("btn-watch").hidden = room !== "inner" || !!state.puzzleDone.inner;
+    const pz = state.puzzles.inner;
+    const banner = $("memory-banner");
+    if (room === "crust" && !state.puzzleDone.crust) {
+      const tiles = crustTileKeys();
+      const got = tiles.filter((k) => state.puzzles.crust.cracks[k]).length;
+      banner.hidden = false;
+      banner.textContent = "Crust slabs stepped on once: " + got + " / " + tiles.length;
+    } else if (room === "inner" && pz && !state.puzzleDone.inner && (pz.phase === "watch" || pz.phase === "input")) {
+      banner.hidden = false;
+      if (pz.phase === "watch" && pz.flash >= 0) {
+        const seq = pz.stage === 1 ? pz.seq1 : pz.seq2;
+        const plate = PLATES[seq[pz.flash]];
+        banner.textContent = plate.glyph + " " + plate.name;
+      } else if (pz.phase === "input") {
+        const seq = pz.stage === 1 ? pz.seq1 : pz.seq2;
+        banner.textContent = "Walk the pattern. Step " + (pz.step + 1) + " of " + seq.length + ".";
+      } else banner.hidden = true;
+    } else banner.hidden = true;
+    $("pause-cert").hidden = !state.dojoEarned;
+  }
+  function syncTitleButtons() {
+    $("title-sound").textContent = "Sound: " + (settings.sound ? "On" : "Off");
+    $("title-read").textContent = "Read Aloud: " + (settings.readAloud ? "On" : "Off");
+    $("btn-continue").hidden = !peekSave();
+  }
+  function renderTeacher() {
+    if (!state) return;
+    const done = ["crust", "mantle", "outer", "inner"].filter((r) => missing(r).length === 0);
+    const lines = [
+      "Student: " + state.name,
+      "Current layer: " + LAYER_INFO[state.room].title,
+      "Completed layers: " + (done.length ? done.map((r) => LAYER_INFO[r].title).join(", ") : "None yet"),
+      "Dojo victory: " + (state.dojoEarned ? "Yes" : "No")
+    ];
+    ["crust", "mantle", "outer", "inner"].forEach((room) => {
+      const names = state.defeated[room].map((i) => {
+        const id = state.crew[room][i];
+        return ELEMENTS[id].name + " (" + ELEMENTS[id].symbol + ")";
+      });
+      lines.push(LAYER_INFO[room].title + " creatures: " + (names.length ? names.join(", ") : "None yet"));
+    });
+    $("teacher-body").textContent = "";
+    lines.forEach((line) => {
+      const p = document.createElement("p");
+      p.textContent = line;
+      $("teacher-body").appendChild(p);
+    });
+    const sol = $("teacher-solutions");
+    sol.textContent = "";
+    const bits = [
+      "Crust: The soil path is safe. Do either slab path first, walk back on the soil, then do the other. On the left, go out to the far-left column. On the right, go out to the far-right column. A straight step skips two slabs. Identify the creature on each path and on each outer bend before you step on that slab. Then walk the soil through the gate.",
+      "Mantle: Identify the creature in the gap and the creature on each glowing spot before a rock moves there. Push the right rock down once, then right once. Push the middle rock up once. Push the left rock down once. Push the middle rock down once, then left three times through the gap. Push the lower left rock left once. Push the remaining rock up twice, then left once. Pushing the middle rock left or down first gets it stuck.",
+      "Outer Core: Follow the glowing line from START to END. Stand on each numbered arrow and press E. 1 down. 2 right. 3 right, twice. 4 up. 5 right. 6 down. 7 down, twice. When every arrow points along the line, the door opens.",
+      "Inner Core: Circle, Square, and Star have creatures. Identify the creature, then step on that plate.",
+      "Inner Core 4-step: " + state.puzzles.inner.seq1.map((i) => PLATES[i].name).join(" → "),
+      "Inner Core 6-step: " + state.puzzles.inner.seq2.map((i) => PLATES[i].name).join(" → ")
+    ];
+    bits.forEach((line) => {
+      const p = document.createElement("p");
+      p.textContent = line;
+      sol.appendChild(p);
+    });
+    $("teacher-sound").textContent = state.sound ? "Mute sound" : "Unmute sound";
+    $("teacher-read").textContent = state.readAloud ? "Turn read-aloud off" : "Turn read-aloud on";
+  }
+  function openTeacher() {
+    if (!state || $("title").hidden === false) return;
+    renderTeacher();
+    show("teacher");
+  }
+  function closeTransient() {
+    hide("dialogue"); hide("battle"); hide("wipe"); hide("pause"); hide("teacher"); hide("confirm"); hide("cert-modal");
+    state.battle = null;
+    state.memoryWatch = false;
+    if (state.puzzles && state.puzzles.inner && state.puzzles.inner.phase === "watch") state.puzzles.inner.phase = "idle";
+  }
+  function toggleSound() {
+    if (state) state.sound = !state.sound;
+    settings.sound = state ? state.sound : !settings.sound;
+    if (!state) settings.sound = !settings.sound;
+    saveSettings();
+    if (state) save();
+    syncTitleButtons();
+  }
+  function toggleRead() {
+    if (state) {
+      state.readAloud = !state.readAloud;
+      settings.readAloud = state.readAloud;
+      save();
+    } else {
+      settings.readAloud = !settings.readAloud;
+      saveSettings();
+    }
+    syncTitleButtons();
+  }
+  function goFullscreen() {
+    const root = document.documentElement;
+    if (!document.fullscreenElement) {
+      if (root.requestFullscreen) root.requestFullscreen();
+    } else if (document.exitFullscreen) document.exitFullscreen();
+  }
+  function primaryAction() {
+    if (state && state.fading) return;
+    if (!$("confirm").hidden) return;
+    if (!$("wipe").hidden) { acceptWipe(); return; }
+    if (!$("dialogue").hidden) { if (!blockAdvance) advanceDialogue(); return; }
+    if (state && state.battle) {
+      if (state.battle.phase === "explain") advanceBattleExplain();
+      return;
+    }
+    if (!$("pause").hidden || !$("teacher").hidden || !$("victory").hidden || !$("cert-modal").hidden) return;
+    if (!state || state.screen !== "play" || state.ride || state.falling || state.memoryWatch) return;
+    interact();
+  }
+  function frame(ts) {
+    const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0);
+    lastTs = ts;
+    update(dt);
+    resize();
+    if (!state || state.screen === "title") {
+      drawWorld("surface", SPAWN.surface.x * TILE, SPAWN.surface.y * TILE, "up", false);
+    } else {
+      const room = state.room;
+      drawWorld(room, state.px, state.py, state.facing, state.moving);
+      if (state.battle) drawBattleArt();
+    }
+    syncHud();
+    requestAnimationFrame(frame);
+  }
+  function bootMaps() {
+    MAPS.surface = buildSurface();
+    MAPS.crust = buildCrust();
+    MAPS.mantle = cloneGrid(buildDepth());
+    MAPS.outer = cloneGrid(buildDepth());
+    MAPS.inner = cloneGrid(buildDepth());
+    MAPS.boss = buildBoss();
+    const issues = validateMaps();
+    if (issues.length) {
+      $("map-error").hidden = false;
+      $("map-error").textContent = issues.join(" | ");
+      console.error(issues);
+    }
+  }
+  function startNew(name) {
+    settings.sound = $("title-sound").textContent.indexOf("On") !== -1;
+    settings.readAloud = $("title-read").textContent.indexOf("On") !== -1;
+    state = createState(name.trim());
+    state.sound = settings.sound;
+    state.readAloud = settings.readAloud;
+    hide("title");
+    hide("victory");
+    enterRoom("surface");
+  }
+  function bind() {
+    $("name-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = $("name-input").value.trim();
+      if (!name) { $("title-error").textContent = "Please type your name."; return; }
+      $("title-error").textContent = "";
+      if (peekSave()) {
+        openConfirm("Start a new mission? The saved game will be replaced.", () => startNew(name));
+      } else startNew(name);
+    });
+    $("btn-continue").addEventListener("click", () => {
+      if (!load()) { $("title-error").textContent = "No saved mission was found."; return; }
+      hide("title");
+      if (state.atVictory) { fillVictory(); show("victory"); }
+      else { state.screen = "play"; showPlayChrome(); }
+    });
+    $("title-sound").addEventListener("click", () => { settings.sound = !settings.sound; saveSettings(); syncTitleButtons(); });
+    $("title-read").addEventListener("click", () => { settings.readAloud = !settings.readAloud; saveSettings(); syncTitleButtons(); });
+    $("title-full").addEventListener("click", goFullscreen);
+    $("btn-full").addEventListener("click", goFullscreen);
+    $("btn-sound").addEventListener("click", () => { if (state) { state.sound = !state.sound; settings.sound = state.sound; save(); } });
+    $("btn-read").addEventListener("click", () => { if (state) { state.readAloud = !state.readAloud; settings.readAloud = state.readAloud; save(); } });
+    $("btn-pause").addEventListener("click", () => { if (state && state.screen === "play" && !state.ride) show("pause"); });
+    $("btn-restart").addEventListener("click", () => {
+      if (!state) return;
+      openConfirm("Restart this layer? Creatures, the puzzle, and the trainer test in this room will reset.", () => wipeRoom(state.room));
+    });
+    $("pause-resume").addEventListener("click", () => hide("pause"));
+    $("pause-restart").addEventListener("click", () => openConfirm("Restart this layer?", () => { hide("pause"); wipeRoom(state.room); }));
+    $("pause-sound").addEventListener("click", () => { state.sound = !state.sound; settings.sound = state.sound; save(); $("pause-sound").textContent = state.sound ? "Sound: On" : "Sound: Off"; });
+    $("pause-read").addEventListener("click", () => { state.readAloud = !state.readAloud; settings.readAloud = state.readAloud; save(); $("pause-read").textContent = state.readAloud ? "Read Aloud: On" : "Read Aloud: Off"; });
+    $("pause-cert").addEventListener("click", () => { hide("pause"); openCertificate(); });
+    $("pause-title").addEventListener("click", () => { save(); state.screen = "title"; hide("pause"); show("title"); syncTitleButtons(); });
+    $("dialogue-next").addEventListener("click", () => { blockAdvance = false; advanceDialogue(); });
+    $("dialogue-read").addEventListener("click", () => speak($("dialogue-text").textContent));
+    $("answers").addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      pickAnswer(Number(btn.getAttribute("data-i")));
+    });
+    $("battle-continue").addEventListener("click", advanceBattleExplain);
+    $("battle-read").addEventListener("click", () => {
+      if (!state || !state.battle) return;
+      if (state.battle.phase === "explain") speak($("battle-result-text").textContent);
+      else {
+        const q = state.battle.questions[state.battle.qi];
+        speak(q.prompt + ". " + (q.clue || "") + ". " + q.choices.map((c, i) => (i + 1) + " " + c).join(". "));
+      }
+    });
+    $("wipe-ok").addEventListener("click", acceptWipe);
+    $("btn-reset-puzzle").addEventListener("click", resetPuzzleClicked);
+    $("btn-watch").addEventListener("click", watchPattern);
+    $("btn-interact").addEventListener("pointerdown", (e) => { e.preventDefault(); primaryAction(); });
+    document.querySelectorAll("#touch [data-dir]").forEach((btn) => {
+      const dir = btn.getAttribute("data-dir");
+      const down = (e) => {
+        e.preventDefault();
+        held[dir] = true;
+        lastDir = dir;
+        if (state && !state.moving && !inputLocked()) tryStep(dir);
+        if (btn.setPointerCapture) btn.setPointerCapture(e.pointerId);
+      };
+      const up = () => { held[dir] = false; };
+      btn.addEventListener("pointerdown", down);
+      btn.addEventListener("pointerup", up);
+      btn.addEventListener("pointercancel", up);
+      btn.addEventListener("pointerleave", up);
+    });
+    $("confirm-yes").addEventListener("click", () => { const cb = confirmCb; hide("confirm"); confirmCb = null; if (cb) cb(); });
+    $("confirm-no").addEventListener("click", () => { hide("confirm"); confirmCb = null; });
+    $("teacher-close").addEventListener("click", () => hide("teacher"));
+    $("teacher-unlock").addEventListener("click", () => {
+      ["surface", "crust", "mantle", "outer", "inner"].forEach((r) => { state.spoke[r] = true; });
+      ["crust", "mantle", "outer", "inner"].forEach((r) => {
+        state.puzzleDone[r] = true;
+        state.trainerDone[r] = true;
+        state.announced[r] = true;
+        state.defeated[r] = state.crew[r].map((_, i) => i);
+      });
+      save();
+      renderTeacher();
+    });
+    $("teacher-boss").addEventListener("click", () => { hide("teacher"); enterRoom("boss"); });
+    $("teacher-restart").addEventListener("click", () => openConfirm("Restart the current room?", () => { wipeRoom(state.room); renderTeacher(); }));
+    $("teacher-sound").addEventListener("click", () => { state.sound = !state.sound; settings.sound = state.sound; save(); renderTeacher(); });
+    $("teacher-read").addEventListener("click", () => { state.readAloud = !state.readAloud; settings.readAloud = state.readAloud; save(); renderTeacher(); });
+    $("teacher-cert").addEventListener("click", openCertificate);
+    $("teacher-reset").addEventListener("click", () => {
+      openConfirm("Reset all progress? The student name will be kept. Dojo victory will be cleared.", () => {
+        resetJourney(false);
+        hide("teacher");
+        hide("victory");
+      });
+    });
+    const warps = $("teacher-warps");
+    [["surface", "Surface"], ["crust", "Crust"], ["mantle", "Mantle"], ["outer", "Outer Core"], ["inner", "Inner Core"]].forEach(([id, label]) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "ghost"; b.textContent = label;
+      b.addEventListener("click", () => { hide("teacher"); enterRoom(id); });
+      warps.appendChild(b);
+    });
+    $("vic-print").addEventListener("click", openCertificate);
+    $("vic-again").addEventListener("click", () => openConfirm("Play again from the surface? Layer progress will reset.", () => {
+      hide("victory");
+      resetJourney(false);
+    }));
+    $("vic-surface").addEventListener("click", () => {
+      state.atVictory = false;
+      state.screen = "play";
+      hide("victory");
+      enterRoom("surface");
+    });
+    $("cert-print").addEventListener("click", () => window.print());
+    $("cert-close").addEventListener("click", () => hide("cert-modal"));
+    window.addEventListener("keydown", (e) => {
+      const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
+      if (typing) return;
+      const dir = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", KeyW: "up", KeyA: "left", KeyS: "down", KeyD: "right" }[e.code];
+      if (dir) {
+        e.preventDefault();
+        if (!e.repeat) {
+          held[dir] = true;
+          lastDir = dir;
+          if (state && !state.moving && !inputLocked()) tryStep(dir);
+        }
+        return;
+      }
+      if (["Space", "Enter", "KeyE"].indexOf(e.code) !== -1) e.preventDefault();
+      if (e.repeat) return;
+      if (e.code === "KeyT") {
+        const now = Date.now();
+        tPresses.push(now);
+        tPresses = tPresses.filter((t) => now - t < 1600);
+        if (tPresses.length >= 3) { tPresses = []; openTeacher(); }
+        return;
+      }
+      if (e.code === "Escape") {
+        if (!$("confirm").hidden) { hide("confirm"); return; }
+        if (!$("teacher").hidden) { hide("teacher"); return; }
+        if (!$("pause").hidden) { hide("pause"); return; }
+        if (!$("cert-modal").hidden) { hide("cert-modal"); return; }
+        if (state && state.screen === "play" && !state.battle && $("dialogue").hidden && $("wipe").hidden) show("pause");
+        return;
+      }
+      if (state && state.battle && state.battle.phase === "ask") {
+        const num = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3 }[e.code];
+        if (num != null) { pickAnswer(num); return; }
+      }
+      if (e.code === "Space" || e.code === "Enter" || e.code === "KeyE") primaryAction();
+    });
+    window.addEventListener("keyup", (e) => {
+      const dir = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", KeyW: "up", KeyA: "left", KeyS: "down", KeyD: "right" }[e.code];
+      if (dir) held[dir] = false;
+      if (e.code === "Space" || e.code === "KeyE" || e.code === "Enter") blockAdvance = false;
+    });
+    window.addEventListener("blur", () => { held.up = held.down = held.left = held.right = false; });
+    window.addEventListener("resize", resize);
+    window.addEventListener("beforeunload", save);
+    document.addEventListener("pointerdown", () => { if (settings.sound || (state && state.sound)) { try { ac(); } catch (err) { /* ignore */ } } }, { once: false });
+  }
+  function showPlayChrome() {}
+  function boot() {
+    loadSettings();
+    bootMaps();
+    bind();
+    syncTitleButtons();
+    resize();
+    requestAnimationFrame(frame);
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
