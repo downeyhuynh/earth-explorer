@@ -134,6 +134,10 @@
     background: #f2c14e; color: #1a1203; font-size: 22px; min-height: 56px; padding: 10px 16px;
   }
   .ghost { background: var(--btn); color: var(--ink); font-size: 18px; min-height: 52px; padding: 8px 12px; }
+  a.menu-link {
+    display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+    margin-top: 14px;
+  }
   .answer {
     display: block; width: 100%; text-align: left; margin: 8px 0;
     background: #243956; color: white; font-size: clamp(18px, 2.5vh, 24px);
@@ -276,6 +280,7 @@
           </div>
         </form>
         <p id="title-error" class="warn"></p>
+        <a class="ghost menu-link" href="plate.html">Plate Explorer: The Continental Crossing</a>
         <div class="row">
           <button type="button" class="ghost" id="title-sound">Sound: On</button>
           <button type="button" class="ghost" id="title-read">Read Aloud: Off</button>
@@ -612,18 +617,18 @@
       "You can also use the on-screen buttons.",
       "Walk up to an element creature to identify it.",
       "Answer correctly to attack.",
-      "Wrong answers restart the current room.",
+      "A wrong answer sends you back to the start of that room.",
+      "Finished fights and a finished puzzle stay done.",
+      "The trainer at the end of each room teaches that layer, then asks 4 questions.",
       "Complete the puzzle and trainer test to unlock the downward escalator.",
-      "The final boss sends you back to the surface after an incorrect answer.",
+      "The Core Guardian gives you 2 lives.",
       "The escalator behind me leads into the crust.",
       "In each room, the upward escalator goes back to the previous room.",
       "Ride down into a room again to reset that room."
     ],
     crust: [
-      "The crust is Earth’s thin, solid outer layer.",
-      "We live on it!",
-      "It contains continents, oceans, rocks, and soil.",
-      "Oxygen and silicon are the most common elements in the crust.",
+      "I will show you how this room works.",
+      "The trainer at the end teaches the crust, then asks 4 questions.",
       "Step on every thin crust slab once.",
       "If you step on a slab a second time, the crust cracks and you fall back to the start of this room.",
       "The soil path in the middle is safe. You may walk it again.",
@@ -635,10 +640,8 @@
       "The upward escalator behind you goes back to the surface."
     ],
     mantle: [
-      "The mantle is Earth’s thickest layer.",
-      "It is made of extremely hot rock.",
-      "It is mostly solid, but it slowly flows.",
-      "This slow movement helps move tectonic plates.",
+      "I will show you how this room works.",
+      "The trainer at the end teaches the mantle, then asks 4 questions.",
       "Push three hot rocks onto the three glowing spots.",
       "A stone wall has one gap in the middle.",
       "Element creatures guard that gap and the glowing spots.",
@@ -649,8 +652,8 @@
       "If a rock gets stuck, step out of the puzzle or press Reset Puzzle."
     ],
     outer: [
-      "The outer core is made of moving liquid iron and nickel.",
-      "The movement of this liquid metal helps create Earth’s magnetic field, which protects Earth from harmful particles from the Sun.",
+      "I will show you how this room works.",
+      "The trainer at the end teaches the outer core, then asks 4 questions.",
       "There is one line of arrows from the energy source to the generator.",
       "Stand on each arrow and press E or Interact to turn it.",
       "Turn every arrow so the line points forward along the path.",
@@ -659,9 +662,8 @@
       "Press Reset Puzzle if you want to start the arrows over."
     ],
     inner: [
-      "The inner core is Earth’s deepest and hottest layer.",
-      "It is mostly iron and nickel.",
-      "Even though it is extremely hot, enormous pressure keeps it solid.",
+      "I will show you how this room works.",
+      "The trainer at the end teaches the inner core, then asks 4 questions.",
       "These plates are solid iron crystals.",
       "Circle, Square, and Star each have an element creature.",
       "Identify that creature, then step on the plate.",
@@ -675,10 +677,48 @@
     ]
   };
   const TRAINER_INTRO = {
-    crust: ["I am the Crust Trainer.", "Answer 4 questions.", "A wrong answer restarts this room.", "There is no timer. Take your time."],
-    mantle: ["I am the Mantle Trainer.", "Answer 4 questions.", "A wrong answer restarts this room.", "There is no timer. Take your time."],
-    outer: ["I am the Outer Core Trainer.", "Answer 4 questions.", "A wrong answer restarts this room.", "There is no timer. Take your time."],
-    inner: ["I am the Inner Core Trainer.", "Answer 4 questions.", "A wrong answer restarts this room.", "There is no timer. Take your time."]
+    crust: [
+      "I am the Crust Trainer.",
+      "The crust is Earth’s thin, solid outer layer.",
+      "We live on it.",
+      "It contains continents, oceans, rocks, and soil.",
+      "Oxygen and silicon are the most common elements in the crust.",
+      "Now answer 4 questions.",
+      "A wrong answer starts these 4 questions over.",
+      "Finished fights and the puzzle stay done.",
+      "There is no timer. Take your time."
+    ],
+    mantle: [
+      "I am the Mantle Trainer.",
+      "The mantle is Earth’s thickest layer.",
+      "It is made of extremely hot rock.",
+      "It is mostly solid, but it slowly flows.",
+      "This slow movement helps move tectonic plates.",
+      "Now answer 4 questions.",
+      "A wrong answer starts these 4 questions over.",
+      "Finished fights and the puzzle stay done.",
+      "There is no timer. Take your time."
+    ],
+    outer: [
+      "I am the Outer Core Trainer.",
+      "The outer core is made of moving liquid iron and nickel.",
+      "The movement of this liquid metal helps create Earth’s magnetic field.",
+      "That field protects Earth from harmful particles from the Sun.",
+      "Now answer 4 questions.",
+      "A wrong answer starts these 4 questions over.",
+      "Finished fights and the puzzle stay done.",
+      "There is no timer. Take your time."
+    ],
+    inner: [
+      "I am the Inner Core Trainer.",
+      "The inner core is Earth’s deepest and hottest layer.",
+      "It is mostly iron and nickel.",
+      "Even though it is extremely hot, enormous pressure keeps it solid.",
+      "Now answer 4 questions.",
+      "A wrong answer starts these 4 questions over.",
+      "Finished fights and the puzzle stay done.",
+      "There is no timer. Take your time."
+    ]
   };
 
   const $ = (id) => document.getElementById(id);
@@ -936,7 +976,6 @@
   function missing(room) {
     if (!state || room === "surface" || room === "boss") return [];
     const out = [];
-    if (!state.spoke[room]) out.push("Talk to the guide");
     const total = state.crew[room].length;
     const got = state.defeated[room].length;
     if (got < total) out.push("Identify element creatures (" + got + "/" + total + ")");
@@ -1099,6 +1138,15 @@
     state.facing = "down";
     save();
   }
+  function respawnInRoom(room) {
+    const s = SPAWN[room] || SPAWN.surface;
+    placePlayer(s.x, s.y);
+    state.facing = s.facing || "down";
+    state.ride = null;
+    state.falling = false;
+    state.battle = null;
+    save();
+  }
   function resetJourney(keepDojo) {
     const name = state.name;
     const sound = state.sound;
@@ -1227,10 +1275,15 @@
     });
     $("answers").hidden = b.phase === "explain";
     $("battle-result").hidden = b.phase !== "explain";
-    const playerMax = b.kind === "boss" ? 10 : (b.kind === "trainer" ? 4 : 1);
-    $("player-energy-label").textContent = "Your knowledge energy";
+    if (b.kind === "boss") {
+      $("player-energy-label").textContent = "Lives";
+      renderPips($("player-pips"), 2, b.lives);
+    } else {
+      const playerMax = b.kind === "trainer" ? 4 : 1;
+      $("player-energy-label").textContent = "Your knowledge energy";
+      renderPips($("player-pips"), playerMax, playerMax);
+    }
     $("enemy-energy-label").textContent = b.enemyName + " knowledge energy";
-    renderPips($("player-pips"), playerMax, playerMax);
     renderPips($("enemy-pips"), b.enemyMax, b.enemyLeft);
     if (b.phase === "ask") maybeSpeak(q.prompt + (q.clue ? ". Clue. " + q.clue : "") + ". " + q.choices.map((c, i) => (i + 1) + ". " + c).join(". "));
     drawBattleArt();
@@ -1266,7 +1319,7 @@
     state.battle = {
       kind: "boss", room: "boss", questions: questions, qi: 0,
       enemyMax: 10, enemyLeft: 10, enemyName: "Core Guardian",
-      phase: "ask", animT: 0
+      lives: 2, phase: "ask", animT: 0
     };
     openBattleUI();
   }
@@ -1284,11 +1337,25 @@
       renderBattle();
     } else {
       sfx("wrong");
+      if (b.kind === "boss" && b.lives > 1) {
+        b.lives -= 1;
+        b.phase = "explain";
+        b.lifeLost = true;
+        const last = b.qi >= b.questions.length - 1;
+        $("battle-result-text").textContent = "Not yet. The answer is: " + q.correct + "\n\nYou have 1 life left." + (last ? "\n\nThat was the last question. You still pass." : "\n\nThe questions continue.");
+        $("battle-continue").textContent = last ? "Finish" : "Next question";
+        $("answers").hidden = true;
+        $("battle-result").hidden = false;
+        renderBattle();
+        maybeSpeak($("battle-result-text").textContent);
+        return;
+      }
       const boss = b.kind === "boss";
       const correct = q.correct;
       state.battle = null;
+      state.wipeKind = boss ? "boss" : "room";
       hide("battle");
-      $("wipe-title").textContent = boss ? "The Core Guardian has returned you to the surface!" : "Your team wiped out!";
+      $("wipe-title").textContent = boss ? "The Core Guardian wiped out your team!" : "Your team wiped out!";
       $("wipe-answer").textContent = "The correct answer was: " + correct;
       show("wipe");
       maybeSpeak($("wipe-title").textContent + " " + $("wipe-answer").textContent);
@@ -1316,6 +1383,7 @@
   function advanceBattleExplain() {
     const b = state.battle;
     if (!b || b.phase !== "explain") return;
+    b.lifeLost = false;
     if (b.qi >= b.questions.length - 1) {
       finishBattle();
     } else {
@@ -1344,17 +1412,26 @@
   }
   function acceptWipe() {
     if ($("wipe").hidden) return;
-    const boss = $("wipe-title").textContent.indexOf("Core Guardian") !== -1;
+    const boss = state.wipeKind === "boss";
+    state.wipeKind = null;
     hide("wipe");
     fadeThen(() => {
       if (!state) return;
+      const room = boss ? "boss" : state.room;
+      if (boss) state.room = "boss";
+      respawnInRoom(room);
       if (boss) {
-        resetJourney(true);
-        openDialogue(["You are back at the surface.", "Your name was kept.", "The journey starts again."]);
+        openDialogue([
+          "You are back at the start of this room.",
+          "Your finished layers stay saved.",
+          "Talk to the Core Guardian to try the 10 questions again."
+        ]);
       } else {
-        const room = state.room;
-        wipeRoom(room);
-        openDialogue(["You are back at the start of this room.", "Creatures, the puzzle, and the trainer test were reset."]);
+        openDialogue([
+          "You are back at the start of this room.",
+          "Finished fights and the puzzle stay done.",
+          "The 4 trainer questions start over if you have not passed them."
+        ]);
       }
     });
   }
@@ -1438,8 +1515,10 @@
     openDialogue([
       "I am the Core Guardian.",
       "I will ask 10 questions from every layer.",
-      "Answer all 10 correctly to finish your mission.",
-      "One wrong answer sends you back to the surface.",
+      "You have 2 lives.",
+      "The first wrong answer uses 1 life. The questions continue.",
+      "A second wrong answer sends you back to the start of this room.",
+      "You do not restart the layers you already finished.",
       "There is no timer."
     ], startBossFight);
   }
@@ -1768,7 +1847,7 @@
           state.spoke[room] = false;
           save();
           if (dirty) {
-            openDialogue(["This room was reset.", "You are at the start.", "Talk to the guide, then try the room again."]);
+            openDialogue(["This room was reset.", "You are at the start.", "Try the room again."]);
             return;
           }
         }
@@ -1780,7 +1859,7 @@
         if (!state.arrivedNote[room]) {
           state.arrivedNote[room] = true;
           if (room === "boss") openDialogue(["You arrived at Earth’s center.", "The upward escalator behind you goes back to the Inner Core.", "Walk up to the Core Guardian."]);
-          else if (GUIDE[room]) openDialogue(["You arrived at the " + LAYER_INFO[room].title + ".", "Talk to the guide.", "The upward escalator goes back to the previous room."]);
+          else if (GUIDE[room]) openDialogue(["You arrived at the " + LAYER_INFO[room].title + ".", "The guide can explain the puzzle. You do not have to talk to the guide before the trainer test.", "The upward escalator goes back to the previous room."]);
         }
       }
       return;

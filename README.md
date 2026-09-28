@@ -21,17 +21,19 @@ Everything needed to play is in `index.html`. Art, dialogue, questions, and soun
 3. Talk to the guide at the surface.
 4. Ride the escalator down into the crust.
 5. In each layer:
-   - Talk to the guide and read the fun fact.
+   - The guide can explain the puzzle. Students do not have to talk to the guide before the trainer test.
    - Walk near an element creature and answer the question.
    - Solve the puzzle.
-   - Pass the four-question trainer test.
+   - Talk to the trainer. The trainer teaches that layer, then gives the four-question test.
    - Ride the unlocked escalator downward.
 6. At Earth’s center, answer 10 questions from the Core Guardian.
 7. The victory screen shows **10 Dojo Points**. Show that screen to the teacher.
 
-A wrong answer in a normal layer restarts that layer only. A wrong answer against the Core Guardian sends the student back to the surface and restarts the journey. The student’s name is kept.
+A wrong answer sends the student back to the start of the current room. Finished creature fights and the finished puzzle stay saved. The 4 trainer questions start over if that test was not passed yet. The Core Guardian gives 2 lives. A second wrong answer returns the student to the start of the center room. Finished layers stay saved.
 
 There are no timers.
+
+**Plate Explorer: The Continental Crossing** is a second game on this site. Open it from the main menu, or open `plate.html`. Students cross moving plates, then Australia and a rainforest, and learn about mantle movement, plate boundaries, Pangaea, Alfred Wegener, and fossil evidence. Progress for that game is saved separately in the browser.
 
 ## How to open the game
 

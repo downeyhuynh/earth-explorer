@@ -1,0 +1,2272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Plate Explorer: The Continental Crossing</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%238d4b2a' width='32' height='32'/%3E%3Cpath d='M4 20h24l-4-8H8z' fill='%23e7c49a'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --ink: #f7f4ea;
+    --bg: #071018;
+    --panel: #121c2e;
+    --line: #ffe56a;
+    --good: #b6ff9a;
+    --bad: #ffb4b4;
+    --btn: #1b314c;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: Verdana, "Trebuchet MS", "Segoe UI", sans-serif;
+    overflow: hidden; user-select: none; -webkit-user-select: none;
+  }
+  button, a { font-family: inherit; cursor: pointer; }
+  button:focus-visible, a:focus-visible { outline: 4px solid var(--line); outline-offset: 2px; }
+  #app { height: 100%; display: flex; flex-direction: column; }
+  #top {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+    padding: 8px 10px; background: #0c1524; border-bottom: 4px solid var(--line); z-index: 3;
+  }
+  #status { min-width: 0; }
+  #level-name { font-size: clamp(18px, 2.4vh, 26px); font-weight: 800; line-height: 1.2; }
+  #check-name { font-size: clamp(16px, 2.1vh, 22px); font-weight: 700; color: var(--line); }
+  #temp-read {
+    font-size: clamp(15px, 2vh, 20px); font-weight: 800; color: #ffb347;
+    background: #3a1a0e; border: 3px solid #ffb347; border-radius: 12px; padding: 6px 10px;
+  }
+  #top-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  #top-actions button, .primary, .ghost, .choice {
+    border-radius: 12px; font-weight: 800; border: 3px solid var(--line);
+  }
+  #top-actions button, .ghost {
+    background: var(--btn); color: var(--ink); font-size: 18px; min-height: 52px; padding: 8px 12px;
+  }
+  .primary { background: #f2c14e; color: #1a1203; font-size: 22px; min-height: 56px; padding: 10px 16px; }
+  a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
+  #stage { flex: 1 1 auto; position: relative; min-height: 0; }
+  canvas { width: 100%; height: 100%; display: block; background: #1a0d08; touch-action: none; image-rendering: pixelated; image-rendering: crisp-edges; }
+  #touch {
+    position: absolute; left: 10px; bottom: 10px; z-index: 4;
+    display: flex; gap: 10px; align-items: flex-end;
+  }
+  .dpad { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .dpad-mid { display: flex; gap: 6px; }
+  #touch button {
+    width: 76px; height: 76px; font-size: 32px; font-weight: 800;
+    background: #1b314c; color: white; border: 4px solid var(--line); border-radius: 16px;
+    touch-action: manipulation;
+  }
+  .overlay {
+    position: fixed; inset: 0; z-index: 8; background: rgba(4, 8, 14, 0.72);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .overlay[hidden] { display: none; }
+  #teacher { z-index: 12; }
+  .card {
+    width: min(760px, 100%); max-height: min(92vh, 900px); overflow: auto;
+    background: var(--panel); border: 4px solid var(--line); border-radius: 18px; padding: 18px 18px 16px;
+  }
+  h1 { font-size: clamp(28px, 4vh, 44px); line-height: 1.1; margin: 0 0 8px; }
+  h2 { font-size: clamp(22px, 3vh, 30px); margin: 0 0 8px; }
+  p, li { font-size: clamp(18px, 2.5vh, 24px); line-height: 1.35; font-weight: 700; }
+  .sub { color: var(--line); letter-spacing: 0.04em; }
+  .quote { border-left: 6px solid #7ec8ff; padding-left: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .choice {
+    display: block; width: 100%; text-align: left; margin: 8px 0;
+    background: #243956; color: white; font-size: clamp(18px, 2.4vh, 24px);
+    min-height: 64px; padding: 12px 14px;
+  }
+  .vocab {
+    background: #0d1a2c; border: 3px solid #7ec8ff; border-radius: 12px; padding: 10px 12px; margin: 8px 0;
+  }
+  #fit-canvas { width: 100%; height: 150px; background: #12304a; border-radius: 12px; margin-top: 8px; }
+  #fit-canvas[hidden] { display: none; }
+  ul { margin: 8px 0; padding-left: 1.2em; }
+  @media (max-width: 720px) {
+    #touch button { width: 68px; height: 68px; }
+    #temp-read { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div id="status">
+      <div id="level-name">Plate Explorer</div>
+      <div id="check-name">Checkpoint: Start</div>
+    </div>
+    <div id="temp-read" hidden>Mantle: extremely hot</div>
+    <div id="top-actions">
+      <button type="button" id="btn-mute">Mute</button>
+      <button type="button" id="btn-restart">Restart</button>
+      <button type="button" id="btn-help">Instructions</button>
+    </div>
+  </header>
+  <div id="stage">
+    <canvas id="view" width="960" height="540"></canvas>
+    <div id="touch">
+      <div class="dpad" aria-label="Move">
+        <button type="button" data-dir="up" aria-label="Move up">▲</button>
+        <div class="dpad-mid">
+          <button type="button" data-dir="left" aria-label="Move left">◀</button>
+          <button type="button" data-dir="down" aria-label="Move down">▼</button>
+          <button type="button" data-dir="right" aria-label="Move right">▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="title" class="overlay">
+  <div class="card">
+    <h1>PLATE EXPLORER</h1>
+    <p class="sub">The Continental Crossing</p>
+    <p class="quote">Earth’s surface may look still, but it is always changing. You will travel across moving tectonic plates and collect evidence that the continents were once connected.</p>
+    <p><strong>Mission:</strong> Cross all three levels, learn about plate movement, and prove that the continents move.</p>
+    <div class="row">
+      <button type="button" class="primary" id="btn-begin">Begin Mission</button>
+      <button type="button" class="ghost" id="btn-continue" hidden>Continue</button>
+      <button type="button" class="ghost" id="btn-endless" hidden>Endless Crossing</button>
+    </div>
+    <div class="row">
+      <button type="button" class="ghost" id="title-mute">Sound: On</button>
+      <button type="button" class="ghost" id="title-help">Instructions</button>
+      <a class="ghost" href="index.html">Return to Journey to the Core</a>
+    </div>
+  </div>
+</div>
+
+<div id="talk" class="overlay" hidden>
+  <div class="card">
+    <h2 id="talk-who"></h2>
+    <p id="talk-text"></p>
+    <div id="talk-cards"></div>
+    <canvas id="fit-canvas" width="640" height="150" hidden></canvas>
+    <div class="row">
+      <button type="button" class="primary" id="talk-next">Next</button>
+    </div>
+  </div>
+</div>
+
+<div id="quiz" class="overlay" hidden>
+  <div class="card">
+    <p id="quiz-lead" class="quote"></p>
+    <h2 id="quiz-q"></h2>
+    <div id="quiz-choices"></div>
+  </div>
+</div>
+
+<div id="fact" class="overlay" hidden>
+  <div class="card">
+    <h2 id="fact-name"></h2>
+    <p id="fact-text"></p>
+    <div class="row">
+      <button type="button" class="primary" id="fact-ok">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div id="help" class="overlay" hidden>
+  <div class="card">
+    <h2>How to play</h2>
+    <ul>
+      <li>Move one space at a time with the arrow keys or W A S D.</li>
+      <li>On a tablet, use the large arrow buttons.</li>
+      <li>Cross the moving plates and lanes.</li>
+      <li>A wrong answer, a fall, or a hit sends you back to the start of this level.</li>
+      <li>That level starts fresh. The other levels stay saved.</li>
+      <li>Read each message. Answer each question before you move on.</li>
+      <li>After you finish, Endless Crossing keeps going. Your best score is saved.</li>
+    </ul>
+    <div class="row"><button type="button" class="primary" id="help-close">Close</button></div>
+  </div>
+</div>
+
+<div id="confirm" class="overlay" hidden>
+  <div class="card">
+    <h2 id="confirm-title">Restart this level?</h2>
+    <p id="confirm-text">You will go back to the start of this level.</p>
+    <div class="row">
+      <button type="button" class="primary" id="confirm-yes">Restart level</button>
+      <button type="button" class="ghost" id="confirm-no">Keep playing</button>
+    </div>
+  </div>
+</div>
+
+<div id="win" class="overlay" hidden>
+  <div class="card">
+    <h1>CONTINENTAL CROSSING COMPLETE!</h1>
+    <p>You crossed the moving plates, explored different continents, and collected evidence for continental drift.</p>
+    <ul>
+      <li>Divergent: plates move apart</li>
+      <li>Convergent: plates move together</li>
+      <li>Transform: plates slide past</li>
+      <li>Pangaea: the ancient supercontinent</li>
+      <li>Continental drift: continents move over time</li>
+      <li>Matching fossils, animals, rocks, and mountains provide evidence</li>
+    </ul>
+    <p>You earned 10 Dojo Points!</p>
+    <p id="win-best" hidden></p>
+    <div class="row">
+      <button type="button" class="primary" id="win-endless">Endless Crossing</button>
+      <button type="button" class="ghost" id="win-again">Play Again</button>
+      <button type="button" class="ghost" id="win-review">Review What I Learned</button>
+      <a class="ghost" href="index.html">Return to Journey to the Core</a>
+    </div>
+  </div>
+</div>
+
+<div id="over" class="overlay" hidden>
+  <div class="card">
+    <h1>Run over</h1>
+    <p id="over-why"></p>
+    <p id="over-score"></p>
+    <p id="over-best"></p>
+    <div class="row">
+      <button type="button" class="primary" id="over-again">Play Again</button>
+      <button type="button" class="ghost" id="over-back">Back</button>
+    </div>
+  </div>
+</div>
+
+<div id="teacher" class="overlay" hidden>
+  <div class="card">
+    <h2>Teacher Menu</h2>
+    <div id="teacher-body"></div>
+    <h2>Move student</h2>
+    <div class="row" id="teacher-warps"></div>
+    <h2>Answer key</h2>
+    <div id="teacher-key"></div>
+    <div class="row">
+      <button type="button" class="ghost" id="teacher-restart">Restart this level</button>
+      <button type="button" class="ghost" id="teacher-sound">Mute</button>
+      <button type="button" class="ghost" id="teacher-endless">Endless Crossing</button>
+      <button type="button" class="ghost" id="teacher-win">Victory screen</button>
+      <button type="button" class="ghost" id="teacher-reset">Reset all progress</button>
+      <button type="button" class="primary" id="teacher-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="review" class="overlay" hidden>
+  <div class="card">
+    <h2>What I learned</h2>
+    <div class="vocab"><strong>Divergent:</strong> plates move apart. Magma can form new crust.</div>
+    <div class="vocab"><strong>Convergent:</strong> plates move together. Mountains, volcanoes, or trenches can form.</div>
+    <div class="vocab"><strong>Transform:</strong> plates slide past each other. This can cause earthquakes.</div>
+    <div class="vocab"><strong>Pangaea:</strong> a supercontinent that contained most of Earth’s land.</div>
+    <div class="vocab"><strong>Continental drift:</strong> the idea that continents move over time.</div>
+    <div class="vocab"><strong>Alfred Wegener:</strong> the scientist who proposed continental drift.</div>
+    <div class="vocab"><strong>Evidence:</strong> matching fossils, similar animals, matching rocks and mountains, and coastlines that fit together.</div>
+    <div class="row"><button type="button" class="primary" id="review-close">Close</button></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* Plate Explorer: The Continental Crossing
+   Original classroom game. No outside art, music, or accounts.
+   Swap facts, questions, and colors in the marked sections below. */
+
+const SAVE_KEY = "plate-explorer-v1";
+const COLS = 11;
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ============================================================
+   EDIT FACTS HERE
+   Short sentences for a 7th-grade reader.
+   ============================================================ */
+const FACTS = {
+  kangaroo: { name: "Kangaroo", text: "Kangaroos are marsupials. A marsupial carries its young in a pouch." },
+  emu: { name: "Emu", text: "Emus are large flightless birds found in Australia." },
+  wombat: { name: "Wombat", text: "Wombats are marsupials that dig underground burrows." },
+  monitor: { name: "Monitor lizard", text: "Monitor lizards are large reptiles found in Australia and other regions." },
+  rock: { name: "Rock evidence", text: "Rock and mountain patterns can provide evidence that continents were once connected." },
+  bird: { name: "Large flightless bird", text: "Similar large flightless birds live on different southern continents. Scientists study these similarities as evidence of past connections." },
+  reptile: { name: "Reptile fossil", text: "Matching reptile fossils have been discovered on continents now separated by oceans." },
+  marsupial: { name: "Rainforest marsupial", text: "Fossil marsupials have been found on continents far from Australia. That is a clue the lands were once closer." },
+  gloss: { name: "Glossopteris fossil", text: "Glossopteris was an ancient plant. Its fossils were found on several southern continents." },
+  rocks: { name: "Matching rocks", text: "Rock layers and mountain ranges can match across continents separated by oceans." },
+  vine: { name: "Moving vine", text: "Watch the vines. Wait for a gap, then step through." },
+  branch: { name: "Falling branch", text: "A shadow warns you before a branch falls. Step away from the shadow." },
+  river: { name: "River", text: "Use a floating log or stone to cross the river." },
+  lava: { name: "Hot mantle", text: "The mantle is extremely hot. Tectonic plates move above it, not through open lava." },
+  gap: { name: "Moving rocks", text: "Rock layers and mountain ranges can match across continents separated by oceans." }
+};
+
+/* ============================================================
+   EDIT QUESTIONS HERE
+   answer must match one choice exactly.
+   ============================================================ */
+const BOUNDARY_Q = {
+  divergent: {
+    lead: "Divergent boundary: Two plates move apart. Magma rises and can form new crust.",
+    q: "What happens at a divergent boundary?",
+    choices: ["Plates move apart.", "Plates move together.", "Plates stop moving.", "Plates disappear."],
+    answer: "Plates move apart.",
+    reset: "start"
+  },
+  convergent: {
+    lead: "Convergent boundary: Two plates move toward each other. Mountains, volcanoes, or trenches can form.",
+    q: "Which landform can form when two plates move together?",
+    choices: ["Mountain", "River", "Cloud", "Sand dune"],
+    answer: "Mountain",
+    reset: "convergent"
+  },
+  transform: {
+    lead: "Transform boundary: Two plates slide past each other. Their movement can cause earthquakes.",
+    q: "What commonly happens at transform boundaries?",
+    choices: ["Earthquakes", "Rainstorms", "Eclipses", "Tides"],
+    answer: "Earthquakes",
+    reset: "transform"
+  }
+};
+
+const WEGENER_QS = [
+  {
+    q: "What was Pangaea?",
+    choices: [
+      "A supercontinent that contained most of Earth’s land.",
+      "A kind of lava.",
+      "A bird from Australia.",
+      "A river that never moves."
+    ],
+    answer: "A supercontinent that contained most of Earth’s land."
+  },
+  {
+    q: "What is continental drift?",
+    choices: [
+      "The idea that continents move over time.",
+      "The idea that continents never move.",
+      "A storm over the ocean.",
+      "A fossil that can fly."
+    ],
+    answer: "The idea that continents move over time."
+  },
+  {
+    q: "Who proposed continental drift?",
+    choices: ["Alfred Wegener", "A kangaroo", "A monitor lizard", "A river"],
+    answer: "Alfred Wegener"
+  }
+];
+
+const LEVEL2_Q = {
+  lead: "Matching fossils on different continents are a clue.",
+  q: "Why are matching fossils on different continents evidence of continental drift?",
+  choices: [
+    "The continents were probably connected in the past.",
+    "The animals flew across the ocean.",
+    "The fossils were moved by people.",
+    "The oceans did not exist."
+  ],
+  answer: "The continents were probably connected in the past."
+};
+
+const FINAL_QS = [
+  {
+    q: "Which similar animals or animal groups did you see in Levels 2 and 3?",
+    choices: ["Marsupials and large flightless birds", "Polar bears and penguins", "Sharks and whales", "Horses and eagles"],
+    answer: "Marsupials and large flightless birds",
+    why: "You saw marsupials, large flightless birds, and similar reptiles on two different continents."
+  },
+  {
+    q: "What fossil plant appeared in the rainforest?",
+    choices: ["Glossopteris", "Cactus", "Oak tree", "Seaweed"],
+    answer: "Glossopteris",
+    why: "Glossopteris was an ancient plant. Its fossils were found on several southern continents."
+  },
+  {
+    q: "Why are matching fossils on different continents important?",
+    choices: [
+      "The continents were probably connected in the past.",
+      "The animals flew across the ocean.",
+      "The fossils were moved by people.",
+      "The oceans did not exist."
+    ],
+    answer: "The continents were probably connected in the past.",
+    why: "Those living things could not cross a huge ocean. The lands were likely together when they lived."
+  },
+  {
+    q: "What was the ancient supercontinent called?",
+    choices: ["Pangaea", "Australia", "The Core", "A river valley"],
+    answer: "Pangaea",
+    why: "Pangaea was a supercontinent that contained most of Earth’s land."
+  },
+  {
+    q: "What are the three types of plate boundaries?",
+    choices: [
+      "Divergent, convergent, and transform",
+      "Hot, cold, and frozen",
+      "North, south, and east",
+      "Rock, water, and air"
+    ],
+    answer: "Divergent, convergent, and transform",
+    why: "The three boundary types are divergent, convergent, and transform."
+  },
+  {
+    q: "Which boundary moves apart?",
+    choices: ["Divergent", "Convergent", "Transform", "Pangaea"],
+    answer: "Divergent",
+    why: "At a divergent boundary, two plates move apart."
+  },
+  {
+    q: "Which boundary moves together?",
+    choices: ["Convergent", "Divergent", "Transform", "Mantle"],
+    answer: "Convergent",
+    why: "At a convergent boundary, two plates move toward each other."
+  },
+  {
+    q: "Which boundary slides sideways?",
+    choices: ["Transform", "Divergent", "Convergent", "Glossopteris"],
+    answer: "Transform",
+    why: "At a transform boundary, two plates slide past each other."
+  }
+];
+
+const WEGENER_LINES = [
+  { who: "Alfred Wegener", text: "Long ago, I proposed that the continents move. I believed the continents were once connected in one giant landmass called Pangaea." },
+  { who: "Alfred Wegener", text: "Pangaea slowly broke apart. Over millions of years, the continents moved to their current locations. This idea is called continental drift." },
+  { who: "Alfred Wegener", cards: [
+    ["Pangaea", "A supercontinent that contained most of Earth’s land."],
+    ["Continental drift", "The idea that continents move over time."],
+    ["Alfred Wegener", "The scientist who proposed continental drift."]
+  ]}
+];
+
+const LEVEL2_LINES = [
+  { who: "Alfred Wegener", text: "Scientists found matching fossils and similar animals on continents separated by oceans. These organisms could not have crossed a huge ocean. This suggests the continents were once connected." },
+  { who: "Alfred Wegener", cards: [
+    ["Fossils", "Matching fossils appear on different continents."],
+    ["Animals", "Similar animals live in places now separated by oceans."],
+    ["Rocks", "Matching rocks and mountain ranges appear on different continents."],
+    ["Coastlines", "Some continent coastlines appear to fit together."]
+  ], fit: true }
+];
+
+const EVIDENCE_LINES = [
+  { who: "Alfred Wegener", text: "Let us review the evidence you crossed." },
+  { who: "Alfred Wegener", cards: [
+    ["Animals", "Marsupials and large flightless birds live on different southern continents. Similar reptiles do too."],
+    ["Glossopteris", "This ancient plant left fossils on several southern continents."],
+    ["Rocks", "Rock layers and mountains can match across oceans."],
+    ["Pangaea", "The ancient supercontinent. Continental drift says the continents moved apart."]
+  ], fit: true }
+];
+
+/* ============================================================
+   EDIT LEVEL LAYOUT HERE
+   kind: pad, lava, road, river, mud, gap
+   ============================================================ */
+function plateRow(section, dir) {
+  const lanes = [];
+  const speed = 0.42;
+  if (section === "divergent") {
+    lanes.push(
+      { x: 0.4, w: 3.3, vx: -speed, group: "L" },
+      { x: 7.0, w: 3.3, vx: speed, group: "R" }
+    );
+  } else if (section === "convergent") {
+    lanes.push(
+      { x: 0.2, w: 3.6, vx: speed, group: "L" },
+      { x: 7.2, w: 3.6, vx: -speed, group: "R" }
+    );
+  } else {
+    const vx = dir > 0 ? 0.5 : -0.5;
+    lanes.push(
+      { x: 0.2, w: 4.2, vx: vx, group: "A" },
+      { x: 5.6, w: 4.2, vx: vx, group: "B" }
+    );
+  }
+  return lanes;
+}
+
+function actor(kind, x, vx, w) {
+  return { kind, x, vx, w: w || 1.15, phase: Math.random() * 5 };
+}
+
+function buildLevel(n) {
+  if (n === 1) {
+    const div = (i) => ({ kind: "lava", section: "divergent", check: "Divergent boundary", platforms: plateRow("divergent"), spawnT: 2 + i });
+    const conv = () => ({ kind: "lava", section: "convergent", check: "Convergent boundary", platforms: plateRow("convergent"), spawnT: 99 });
+    const trans = (i) => ({ kind: "lava", section: "transform", check: "Transform boundary", platforms: plateRow("transform", i % 2 ? 1 : -1), spawnT: 99 });
+    return {
+      name: "Level 1: Mantle and Moving Plates",
+      lanes: [
+        { kind: "pad", check: "Moving on the Mantle", mark: "start" },
+        div(0), div(1), div(2), div(3),
+        { kind: "pad", check: "Divergent boundary", gate: "divergent", mark: "divergent" },
+        { kind: "pad", check: "Convergent boundary", mark: "convergent" },
+        conv(), conv(), conv(), conv(),
+        { kind: "pad", check: "Convergent boundary", gate: "convergent" },
+        { kind: "pad", check: "Transform boundary", mark: "transform" },
+        trans(0), trans(1), trans(2), trans(3),
+        { kind: "pad", check: "Transform boundary", gate: "transform" },
+        { kind: "pad", check: "Alfred Wegener", gate: "wegener", mark: "wegener" }
+      ]
+    };
+  }
+  if (n === 2) {
+    return {
+      name: "Level 2: Australia Evidence Crossing",
+      lanes: [
+        { kind: "pad", check: "Australia start", theme: "aus" },
+        { kind: "road", check: "Animal lanes", theme: "aus", actors: [actor("kangaroo", 0, 1.15), actor("kangaroo", 5.5, 1.15)] },
+        { kind: "road", check: "Animal lanes", theme: "aus", actors: [actor("emu", 2, 1.85, 1.3), actor("emu", 8, 1.85, 1.3)] },
+        { kind: "pad", check: "Animal lanes", theme: "aus" },
+        { kind: "road", check: "Animal lanes", theme: "aus", actors: [actor("wombat", 1, 0.42, 1.25), actor("wombat", 6.2, 0.42, 1.25)] },
+        { kind: "road", check: "Animal lanes", theme: "aus", actors: [actor("monitor", 0.5, 0.95, 1.4), actor("monitor", 6.5, 0.95, 1.4)] },
+        { kind: "pad", check: "Rock evidence", theme: "aus" },
+        { kind: "road", check: "Rock evidence", theme: "aus", actors: [actor("rock", 0, 0.7, 1.35), actor("rock", 4.5, 0.7, 1.35)] },
+        { kind: "road", check: "Rock evidence", theme: "aus", actors: [actor("rock", 2, -0.62, 1.45), actor("rock", 7, -0.62, 1.45)] },
+        { kind: "pad", check: "River crossing", theme: "aus" },
+        { kind: "river", check: "River crossing", theme: "aus", platforms: [{ x: 0.4, w: 2.5, vx: 0.55, group: "log" }, { x: 6, w: 2.5, vx: 0.55, group: "log" }] },
+        { kind: "river", check: "River crossing", theme: "aus", platforms: [{ x: 1.5, w: 2.3, vx: -0.48, group: "log" }, { x: 7, w: 2.3, vx: -0.48, group: "log" }] },
+        { kind: "pad", check: "Alfred’s evidence", theme: "aus", gate: "level2" }
+      ]
+    };
+  }
+  return {
+    name: "Level 3: Rainforest Evidence Crossing",
+    lanes: [
+      { kind: "pad", check: "Rainforest start", theme: "rain" },
+      { kind: "road", check: "Similar animals", theme: "rain", actors: [actor("bird", 1, 1.05, 1.35), actor("bird", 6.5, 1.05, 1.35)] },
+      { kind: "road", check: "Similar animals", theme: "rain", actors: [actor("marsupial", 0, 0.85), actor("reptile", 4.2, 0.7, 1.3), actor("marsupial", 8, 0.85)] },
+      { kind: "pad", check: "Fossil evidence", theme: "rain", info: "gloss" },
+      { kind: "road", check: "Vines", theme: "rain", actors: [actor("vine", 0, 0.8, 1.5), actor("vine", 5, 0.8, 1.5)] },
+      { kind: "road", check: "Vines", theme: "rain", actors: [actor("vine", 2, -0.72, 1.5), actor("vine", 7.2, -0.72, 1.5)] },
+      { kind: "mud", check: "Muddy ground", theme: "rain" },
+      { kind: "river", check: "River logs", theme: "rain", platforms: [{ x: 0.2, w: 2.6, vx: 0.5, group: "log" }, { x: 5.8, w: 2.6, vx: 0.5, group: "log" }] },
+      { kind: "pad", check: "Falling branches", theme: "rain" },
+      { kind: "road", check: "Falling branches", theme: "rain", actors: [
+        { kind: "branch", x: 2, w: 1, phase: 0.2, period: 3.4 },
+        { kind: "branch", x: 5, w: 1, phase: 1.4, period: 3.6 },
+        { kind: "branch", x: 8, w: 1, phase: 2.2, period: 3.3 }
+      ]},
+      { kind: "gap", check: "Rock platforms", theme: "rain", platforms: [{ x: 0.3, w: 3.2, vx: 0.4, group: "rock" }, { x: 6.2, w: 3.2, vx: 0.4, group: "rock" }] },
+      { kind: "pad", check: "Matching rocks", theme: "rain", info: "rocks" },
+      { kind: "pad", check: "Final evidence test", theme: "rain", gate: "final", mark: "wegener" }
+    ]
+  };
+}
+
+const MARK_LANE = { start: 0 };
+
+function indexMarks(level) {
+  const marks = { start: 0 };
+  level.lanes.forEach((lane, i) => { if (lane.mark) marks[lane.mark] = i; });
+  return marks;
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const canvas = document.getElementById("view");
+const ctx = canvas.getContext("2d");
+const state = {
+  screen: "title",
+  levelNum: 1,
+  level: null,
+  marks: {},
+  player: { x: 5, lane: 0, face: "up" },
+  passed: {},
+  seenInfo: {},
+  mode: "title",
+  moveWait: 0,
+  time: 0,
+  mute: false,
+  quiz: null,
+  quizIndex: 0,
+  misses: 0,
+  lastSlot: -1,
+  talk: null,
+  pendingReset: null,
+  won: false,
+  endless: false,
+  score: 0,
+  best: 0
+};
+let heldDir = null;
+let audioCtx = null;
+
+function levelStartX() { return 5; }
+
+function saveProgress() {
+  try {
+    const prev = loadProgress();
+    const playing = state.screen === "play" || state.won;
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      level: state.endless ? ((prev && prev.level) || 3) : (playing ? state.levelNum : (prev && prev.level) || 0),
+      mute: state.mute,
+      won: state.endless ? true : (playing ? state.won : !!(prev && prev.won)),
+      cleared: !!(state.won || state.endless || (prev && prev.cleared)),
+      best: Math.max(state.best || 0, (prev && prev.best) || 0)
+    }));
+  } catch (err) { /* school browser may block storage */ }
+}
+
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) { return null; }
+}
+
+function beep(freq, dur, type) {
+  if (state.mute) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type || "triangle";
+    o.frequency.value = freq;
+    g.gain.value = 0.04;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    o.stop(audioCtx.currentTime + dur);
+  } catch (err) { /* sound is optional */ }
+}
+
+function show(id, on) {
+  document.getElementById(id).hidden = !on;
+}
+
+function locked() {
+  return state.mode !== "play";
+}
+
+function syncHud() {
+  const lv = state.level;
+  if (state.endless) {
+    document.getElementById("level-name").textContent = "Endless Crossing";
+    document.getElementById("check-name").textContent = "Score: " + state.score + "    Best: " + state.best;
+  } else {
+    document.getElementById("level-name").textContent = lv ? lv.name : "Plate Explorer";
+    const lane = lv ? lv.lanes[state.player.lane] : null;
+    document.getElementById("check-name").textContent = lane ? ("Checkpoint: " + lane.check) : "Checkpoint: Start";
+  }
+  const temp = document.getElementById("temp-read");
+  const hot = !state.endless && state.levelNum === 1 && state.mode !== "title";
+  temp.hidden = !hot;
+  if (hot) temp.textContent = "Mantle temperature: extremely hot (about 500–4,000°C)";
+  document.getElementById("btn-mute").textContent = state.mute ? "Sound" : "Mute";
+  document.getElementById("title-mute").textContent = state.mute ? "Sound: Off" : "Sound: On";
+}
+
+function startLevel(n, playIntro) {
+  state.endless = false;
+  state.screen = "play";
+  state.levelNum = n;
+  state.level = buildLevel(n);
+  state.marks = indexMarks(state.level);
+  state.player.x = levelStartX();
+  state.player.lane = 0;
+  state.player.face = "up";
+  state.passed = {};
+  state.seenInfo = {};
+  state.quiz = null;
+  state.misses = 0;
+  state.pendingReset = null;
+  state.won = false;
+  hideAllOverlays();
+  if (playIntro) openIntro();
+  else state.mode = "play";
+  saveProgress();
+  syncHud();
+}
+
+function hideAllOverlays() {
+  ["talk", "quiz", "fact", "help", "confirm", "win", "review", "title", "over", "teacher"].forEach((id) => show(id, false));
+}
+
+function ensureEndless(ahead) {
+  const need = state.player.lane + ahead;
+  while (state.level.lanes.length <= need) {
+    state.level.lanes.push(makeEndlessLane(state.level.lanes.length));
+  }
+}
+
+function makeEndlessLane(i) {
+  const theme = Math.floor(i / 12) % 2 === 0 ? "aus" : "rain";
+  if (i < 3 || i % 5 === 0) return { kind: "pad", check: "Grass", theme };
+  const dir = i % 2 === 0 ? 1 : -1;
+  const speed = Math.min(2.1, 0.5 + Math.floor(i / 10) * 0.12);
+  if (i % 5 === 4) {
+    return {
+      kind: "river",
+      check: "River",
+      theme,
+      platforms: [
+        { x: (i % 3) * 0.4, w: 2.4, vx: dir * speed * 0.85, group: "log" },
+        { x: 4 + (i % 2), w: 2.2, vx: dir * speed * 0.85, group: "log" },
+        { x: 8.1, w: 2.3, vx: dir * speed * 0.85, group: "log" }
+      ]
+    };
+  }
+  const kinds = ["kangaroo", "emu", "wombat", "monitor", "rock", "bird", "marsupial", "reptile"];
+  const kind = kinds[i % kinds.length];
+  const count = 2 + (i > 24 ? 1 : 0) + (i > 48 ? 1 : 0);
+  const actors = [];
+  for (let n = 0; n < count; n++) {
+    actors.push(actor(kind, (n * COLS) / count, dir * speed, kind === "emu" || kind === "rock" ? 1.3 : 1.15));
+  }
+  return { kind: "road", check: "Lane", theme, actors };
+}
+
+function startEndless() {
+  heldDir = null;
+  state.endless = true;
+  state.won = true;
+  state.screen = "play";
+  state.mode = "play";
+  state.score = 0;
+  state.level = { name: "Endless Crossing", lanes: [] };
+  state.player.x = levelStartX();
+  state.player.lane = 0;
+  state.player.face = "up";
+  state.passed = {};
+  state.seenInfo = {};
+  state.quiz = null;
+  state.pendingReset = null;
+  ensureEndless(18);
+  hideAllOverlays();
+  syncHud();
+}
+
+function noteScore() {
+  if (state.player.lane > state.score) {
+    state.score = state.player.lane;
+    if (state.score > state.best) {
+      state.best = state.score;
+      saveProgress();
+    }
+  }
+}
+
+function endEndless(why) {
+  heldDir = null;
+  if (state.score > state.best) state.best = state.score;
+  state.won = true;
+  saveProgress();
+  state.mode = "endless-over";
+  document.getElementById("over-why").textContent = why;
+  document.getElementById("over-score").textContent = "Score: " + state.score;
+  document.getElementById("over-best").textContent = "Best: " + state.best;
+  show("over", true);
+}
+
+function hitPlayer(id) {
+  beep(140, 0.15, "sawtooth");
+  if (state.endless) {
+    endEndless(id === "river" || id === "lava" || id === "gap" ? "You missed the log." : "You got hit.");
+    return;
+  }
+  showFact(id, "level");
+}
+
+function showVictory() {
+  const line = document.getElementById("win-best");
+  if (state.best > 0) {
+    line.hidden = false;
+    line.textContent = "Endless best score: " + state.best;
+  } else {
+    line.hidden = true;
+  }
+  show("win", true);
+}
+
+function failLevel(text) {
+  heldDir = null;
+  say([{ who: "Guide", text: text + " This level starts over." }], () => {
+    startLevel(state.levelNum, false);
+  });
+}
+
+/* Dialogue and questions cannot be skipped. Next is required. */
+function say(lines, done) {
+  heldDir = null;
+  state.mode = "talk";
+  state.talk = { lines: lines, i: 0, done: done || null };
+  renderTalk();
+  show("talk", true);
+}
+
+function renderTalk() {
+  const step = state.talk.lines[state.talk.i];
+  document.getElementById("talk-who").textContent = step.who || "Guide";
+  document.getElementById("talk-text").textContent = step.text || "";
+  const cards = document.getElementById("talk-cards");
+  cards.innerHTML = "";
+  (step.cards || []).forEach((pair) => {
+    const div = document.createElement("div");
+    div.className = "vocab";
+    div.innerHTML = "<strong>" + pair[0] + ":</strong> " + pair[1];
+    cards.appendChild(div);
+  });
+  const fit = document.getElementById("fit-canvas");
+  fit.hidden = !step.fit;
+  if (step.fit) drawFit(fit.getContext("2d"), state.time);
+}
+
+function openIntro() {
+  if (state.levelNum === 1) {
+    say([
+      { who: "Guide", text: "Cross on the rocky plates moving above the hot mantle. Heat inside Earth causes mantle material to move slowly. This movement helps move tectonic plates." },
+      { who: "Guide", cards: [
+        ["Crust", "Earth’s crust is broken into tectonic plates."],
+        ["Mantle", "The plates move over the softer upper mantle."],
+        ["Speed", "Plates move only a few centimeters each year."],
+        ["Heat", "Heat inside Earth helps create movement in the mantle."]
+      ]}
+    ], () => { state.mode = "play"; });
+  } else if (state.levelNum === 2) {
+    say([
+      { who: "Guide", text: "This land is like Australia. Dry grass, red soil, and animals are ahead." },
+      { who: "Guide", text: "Cross the lanes. A hit or a wrong answer sends you back to the start of this level." }
+    ], () => { state.mode = "play"; });
+  } else {
+    say([
+      { who: "Guide", text: "This rainforest is on another continent. Look for animals and fossils that match Australia." },
+      { who: "Guide", text: "Watch for moving vines, muddy ground, floating logs, warning shadows, and moving rocks." }
+    ], () => { state.mode = "play"; });
+  }
+}
+
+function shuffleChoices(choices, answer) {
+  const list = choices.slice();
+  let slot = 0;
+  for (let n = 0; n < 6; n++) {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = list[i]; list[i] = list[j]; list[j] = tmp;
+    }
+    slot = list.indexOf(answer);
+    if (slot !== state.lastSlot) break;
+  }
+  state.lastSlot = slot;
+  return list;
+}
+
+function ask(pack, onResult) {
+  heldDir = null;
+  state.mode = "quiz";
+  const choices = shuffleChoices(pack.choices, pack.answer);
+  state.quiz = { pack, choices, onResult };
+  document.getElementById("quiz-lead").textContent = pack.lead || "";
+  document.getElementById("quiz-q").textContent = pack.q;
+  const box = document.getElementById("quiz-choices");
+  box.innerHTML = "";
+  choices.forEach((text, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "choice";
+    btn.textContent = (i + 1) + ". " + text;
+    btn.addEventListener("click", () => pickChoice(i));
+    box.appendChild(btn);
+  });
+  show("quiz", true);
+}
+
+function pickChoice(i) {
+  if (state.mode !== "quiz" || !state.quiz) return;
+  const chosen = state.quiz.choices[i];
+  const pack = state.quiz.pack;
+  const cb = state.quiz.onResult;
+  show("quiz", false);
+  state.quiz = null;
+  beep(chosen === pack.answer ? 660 : 180, 0.12, "square");
+  cb(chosen === pack.answer, pack);
+}
+
+function openGate(id) {
+  if (id === "divergent" || id === "convergent" || id === "transform") {
+    const pack = BOUNDARY_Q[id];
+    say([{ who: "Guide", text: pack.lead }], () => {
+      ask(pack, (ok) => {
+        if (ok) {
+          state.passed[id] = true;
+          state.mode = "play";
+        } else {
+          failLevel("Not yet. The answer is: " + pack.answer);
+        }
+      });
+    });
+    return;
+  }
+  if (id === "wegener") {
+    say(WEGENER_LINES, () => askWegener(0));
+    return;
+  }
+  if (id === "level2") {
+    say(LEVEL2_LINES, () => askLevel2());
+    return;
+  }
+  if (id === "final") {
+    say([{ who: "Alfred Wegener", text: "You reached the end. Tell me what evidence you observed. One question at a time." }].concat(EVIDENCE_LINES), () => {
+      state.quizIndex = 0;
+      state.misses = 0;
+      askFinal();
+    });
+  }
+}
+
+function askLevel2() {
+  ask(LEVEL2_Q, (ok) => {
+    if (ok) {
+      state.passed.level2 = true;
+      say([{ who: "Guide", text: "Correct. The continents were probably connected in the past. Next, cross the rainforest." }], () => startLevel(3, true));
+      return;
+    }
+    failLevel("Not yet. The continents were probably connected in the past.");
+  });
+}
+
+function askWegener(i) {
+  if (i >= WEGENER_QS.length) {
+    state.passed.wegener = true;
+    say([{ who: "Guide", text: "You passed Alfred’s checkpoint. Level 2 is the Australia crossing." }], () => startLevel(2, true));
+    return;
+  }
+  ask(WEGENER_QS[i], (ok) => {
+    if (ok) askWegener(i + 1);
+    else failLevel("Not yet. The answer is: " + WEGENER_QS[i].answer);
+  });
+}
+
+function askFinal() {
+  if (state.quizIndex >= FINAL_QS.length) {
+    state.won = true;
+    state.levelNum = 3;
+    saveProgress();
+    state.mode = "win";
+    hideAllOverlays();
+    showVictory();
+    beep(520, 0.08, "triangle");
+    setTimeout(() => beep(680, 0.14, "triangle"), 120);
+    return;
+  }
+  const pack = FINAL_QS[state.quizIndex];
+  ask(pack, (ok) => {
+    if (ok) {
+      state.misses = 0;
+      state.quizIndex += 1;
+      askFinal();
+      return;
+    }
+    failLevel("Not yet. " + pack.why);
+  });
+}
+
+function showFact(id, after) {
+  heldDir = null;
+  const fact = FACTS[id] || { name: "Notice", text: "Read the clue, then continue." };
+  state.mode = "fact";
+  document.getElementById("fact-name").textContent = fact.name;
+  document.getElementById("fact-text").textContent = fact.text;
+  state.pendingReset = after || "level";
+  show("fact", true);
+}
+
+function covers(p, x) {
+  const c = x + 0.5;
+  return c >= p.x + 0.05 && c <= p.x + p.w - 0.05;
+}
+
+function supportPlatform(lane, x) {
+  if (!lane || !lane.platforms) return null;
+  for (let i = 0; i < lane.platforms.length; i++) {
+    if (covers(lane.platforms[i], x)) return lane.platforms[i];
+  }
+  return null;
+}
+
+function solidKind(kind) {
+  return kind === "pad" || kind === "road" || kind === "mud";
+}
+
+function supported(lane, x) {
+  if (!lane) return false;
+  if (x < 0 || x > COLS - 1) return false;
+  if (solidKind(lane.kind)) return true;
+  return !!supportPlatform(lane, x);
+}
+
+function tryMove(dir) {
+  if (locked() || worldFrozen()) return;
+  state.player.face = dir;
+  if (state.moveWait > 0) return;
+  const lanes = state.level.lanes;
+  let nx = state.player.x;
+  let nl = state.player.lane;
+  if (dir === "left") nx -= 1;
+  if (dir === "right") nx += 1;
+  if (dir === "up") nl += 1;
+  if (dir === "down") nl -= 1;
+  if (state.endless) ensureEndless(16);
+  if (nl < 0 || nl >= lanes.length) return;
+  if (nx < 0 || nx > COLS - 1) return;
+  const dest = lanes[nl];
+  const fromSolid = solidKind(lanes[state.player.lane].kind);
+  if (fromSolid) nx = Math.round(nx);
+  if (!supported(dest, nx)) {
+    if (dest.kind === "lava" || dest.kind === "river" || dest.kind === "gap") {
+      state.player.x = nx;
+      state.player.lane = nl;
+      state.moveWait = 0.2;
+      const failId = dest.kind === "lava" ? "lava" : dest.kind === "river" ? "river" : "gap";
+      hitPlayer(failId);
+    }
+    return;
+  }
+  state.player.x = solidKind(dest.kind) ? Math.round(nx) : nx;
+  state.player.lane = nl;
+  state.moveWait = state.endless ? 0.14 : (dest.kind === "mud" ? 0.48 : 0.2);
+  beep(420, 0.04, "square");
+  onArrive();
+}
+
+function onArrive() {
+  if (state.endless) {
+    noteScore();
+    ensureEndless(16);
+    return;
+  }
+  const lane = state.level.lanes[state.player.lane];
+  if (lane.gate && !state.passed[lane.gate]) {
+    openGate(lane.gate);
+    return;
+  }
+  if (lane.info && !state.seenInfo[lane.info]) {
+    state.seenInfo[lane.info] = true;
+    say([{ who: "Field note", text: FACTS[lane.info].name + ". " + FACTS[lane.info].text }], () => { state.mode = "play"; });
+  }
+}
+
+function actorHit(actor, laneTime) {
+  if (actor.kind === "branch") {
+    const period = actor.period || 3.4;
+    const phase = (laneTime + actor.phase) % period;
+    const danger = phase > period - 0.42;
+    if (!danger) return false;
+    return Math.abs(actor.x - state.player.x) < 0.8;
+  }
+  const half = (actor.w || 1) / 2;
+  const ax = actor.x + half;
+  const px = state.player.x + 0.5;
+  return Math.abs(ax - px) < half + 0.32;
+}
+
+function branchPhase(actor) {
+  const period = actor.period || 3.4;
+  return (state.time + actor.phase) % period;
+}
+
+function worldFrozen() {
+  return !document.getElementById("help").hidden || !document.getElementById("confirm").hidden || !document.getElementById("teacher").hidden;
+}
+
+function updateWorld(dt) {
+  if (worldFrozen()) return;
+  if (state.endless) ensureEndless(16);
+  const lanes = state.level.lanes;
+  const startI = state.endless ? Math.max(0, state.player.lane - 6) : 0;
+  const endI = state.endless ? Math.min(lanes.length, state.player.lane + 16) : lanes.length;
+  for (let i = startI; i < endI; i++) {
+    const lane = lanes[i];
+    if (lane.platforms) {
+      if (lane.section === "divergent") {
+        lane.spawnT -= dt;
+        if (lane.spawnT <= 0) {
+          const extras = lane.platforms.filter((p) => p.group === "new");
+          if (extras.length < 2) {
+            lane.platforms.push({ x: 4.3, w: 2.3, vx: -0.16, group: "new", born: state.time });
+          }
+          lane.spawnT = 6.2;
+        }
+      }
+      for (let p = 0; p < lane.platforms.length; p++) {
+        const plat = lane.platforms[p];
+        plat.x += plat.vx * dt;
+        if (plat.group !== "new") {
+          if (plat.x > COLS) plat.x = -plat.w;
+          if (plat.x + plat.w < 0) plat.x = COLS;
+        } else if (plat.x + plat.w < 0) {
+          plat.x = COLS;
+        }
+      }
+    }
+    if (lane.actors) {
+      for (let a = 0; a < lane.actors.length; a++) {
+        const actor = lane.actors[a];
+        if (actor.kind === "branch") continue;
+        actor.x += actor.vx * dt;
+        const w = actor.w || 1;
+        if (actor.vx > 0 && actor.x > COLS) actor.x = -w;
+        if (actor.vx < 0 && actor.x + w < 0) actor.x = COLS;
+      }
+    }
+  }
+  const lane = lanes[state.player.lane];
+  if (lane.platforms && !solidKind(lane.kind)) {
+    const plat = supportPlatform(lane, state.player.x);
+    if (!plat) {
+      hitPlayer(lane.kind === "lava" ? "lava" : lane.kind === "river" ? "river" : "gap");
+      return;
+    }
+    state.player.x += plat.vx * dt;
+    if (state.player.x < -0.2 || state.player.x > COLS - 0.8) {
+      hitPlayer(lane.kind === "lava" ? "lava" : lane.kind === "river" ? "river" : "gap");
+      return;
+    }
+  }
+  if (lane.actors) {
+    for (let a = 0; a < lane.actors.length; a++) {
+      if (actorHit(lane.actors[a], state.time)) {
+        hitPlayer(lane.actors[a].kind);
+        return;
+      }
+    }
+  }
+}
+
+/* ============================================================
+   DRAW  — original placeholder art. Replace these functions
+   if you add your own image files later.
+   ============================================================ */
+function resize() {
+  const stage = document.getElementById("stage");
+  canvas.width = Math.max(320, stage.clientWidth);
+  canvas.height = Math.max(240, stage.clientHeight);
+}
+
+function tileSize() {
+  const byHeight = Math.floor(canvas.height / 6.2);
+  const byWidth = Math.floor((canvas.width - 8) / COLS);
+  let t = Math.min(byHeight, byWidth, 64);
+  t = Math.floor(t / 16) * 16;
+  return Math.max(32, t);
+}
+
+function originX(tile) {
+  return (canvas.width - COLS * tile) / 2;
+}
+
+function laneY(lane, tile) {
+  const anchor = canvas.height * 0.7;
+  return anchor - (lane - state.player.lane) * tile;
+}
+
+/* ============================================================
+   EDIT SPRITES HERE
+   Original 16x16 pixel art. Each row is 16 characters.
+   . is empty. Other letters are colors in INK below.
+   These are not copied from any existing game.
+   ============================================================ */
+const INK = {
+  x: "#1c2430",
+  s: "#ffd2ac",
+  h: "#6b4423",
+  z: "#1c2430",
+  c: "#1f9a94",
+  g: "#ffd24a",
+  k: "#e07030",
+  d: "#5a3a28",
+  p: "#ffd8b8",
+  u: "#6d5344",
+  l: "#5cb044",
+  j: "#2d6a30",
+  q: "#a07848",
+  y: "#c8c0b4",
+  v: "#3aaa48",
+  f: "#2f8a38",
+  o: "#f3e6c4",
+  a: "#d5dde6",
+  m: "#3d7eb8",
+  n: "#8d6a3a",
+  w: "#f7f7f2"
+};
+
+const SPR = {
+  heroDown: [
+    "................",
+    "................",
+    ".....xxxx.......",
+    "....xhhhhx......",
+    "....xhsshx......",
+    "....xhzhzx......",
+    "....xhsshx......",
+    ".....xxxx.......",
+    "....xcccccx.....",
+    "...xcccccccx....",
+    "...xccggcccx....",
+    "...xcccccccx....",
+    "....xcccccx.....",
+    ".....x..x.......",
+    ".....xx.xx......",
+    "................"
+  ],
+  heroDownWalk: [
+    "................",
+    "................",
+    ".....xxxx.......",
+    "....xhhhhx......",
+    "....xhsshx......",
+    "....xhzhzx......",
+    "....xhsshx......",
+    ".....xxxx.......",
+    "....xcccccx.....",
+    "...xcccccccx....",
+    "...xccggcccx....",
+    "...xcccccccx....",
+    "....xcccccx.....",
+    "....xx..x.......",
+    "....x...xx......",
+    "................"
+  ],
+  heroUp: [
+    "................",
+    "................",
+    ".....xxxx.......",
+    "....xhhhhx......",
+    "....xhhhhx......",
+    "....xhhhhx......",
+    "....xhhhhx......",
+    ".....xxxx.......",
+    "....xcccccx.....",
+    "...xcccccccx....",
+    "...xccggcccx....",
+    "...xcccccccx....",
+    "....xcccccx.....",
+    ".....x..x.......",
+    "....xx..xx......",
+    "................"
+  ],
+  heroSide: [
+    "................",
+    "................",
+    ".....xxxx.......",
+    "....xhhhhx......",
+    "....xhhssx......",
+    "....xhhzsx......",
+    "....xhhssx......",
+    ".....xxxx.......",
+    "....xccccx......",
+    "...xccccccx.....",
+    "...xccggccx.....",
+    "....xccccx......",
+    ".....xx.x.......",
+    ".....x..xx......",
+    "................",
+    "................"
+  ],
+  heroSideWalk: [
+    "................",
+    "................",
+    ".....xxxx.......",
+    "....xhhhhx......",
+    "....xhhssx......",
+    "....xhhzsx......",
+    "....xhhssx......",
+    ".....xxxx.......",
+    "....xccccx......",
+    "...xccccccx.....",
+    "...xccggccx.....",
+    "....xccccx......",
+    "......x.xx......",
+    ".....xx..x......",
+    "................",
+    "................"
+  ],
+  guide: [
+    "................",
+    ".....xxxx.......",
+    "....xaaaax......",
+    "....xassax......",
+    "....xazazx......",
+    "....xassax......",
+    ".....xxxx.......",
+    "....xmmmmx......",
+    "...xmmmmmmx.....",
+    "...xmmwwmmx.....",
+    "...xmmmmmmx.....",
+    "....xmmmmx......",
+    ".....x..x.......",
+    "....xx..xx......",
+    "................",
+    "................"
+  ],
+  wegener: [
+    "................",
+    ".....xxxx.......",
+    "....xaaaax......",
+    "....xawwzx......",
+    "....xazazx......",
+    "....xassax......",
+    ".....xxxx.......",
+    "....xnnnnx......",
+    "...xnnnnnnx.....",
+    "...xnnnnnnx.....",
+    "...xnnnnnnx.....",
+    "....xnnnnx......",
+    ".....x..x.......",
+    "....xx..xx......",
+    "................",
+    "................"
+  ],
+  kangaroo: [
+    "......xx........",
+    ".....xkkx.......",
+    ".....xkzx.......",
+    "......xxx..x....",
+    "....xxkkkkxx....",
+    "...xkkkkkkkkx...",
+    "...xkkppkkkkx...",
+    "....xkkkkkxx....",
+    ".....xkkx.xxx...",
+    ".....x..x...x...",
+    "....xx..xx..x...",
+    "............x...",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  kangarooHop: [
+    "......xx........",
+    ".....xkkx.......",
+    ".....xkzx.......",
+    "......xxx..x....",
+    "....xxkkkkxx....",
+    "...xkkkkkkkkx...",
+    "...xkkppkkkkx...",
+    "....xkkkkkxx....",
+    ".....xkkxxx.....",
+    "....xx..x.xx....",
+    "....x.....x.....",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  emu: [
+    ".........xxxx...",
+    "........xuuuux..",
+    "........xuzux...",
+    ".........xxxx...",
+    ".........xuuux..",
+    ".........xuuux..",
+    "........xuuuux..",
+    ".......xuuuuux..",
+    "......xuuuuuux..",
+    ".......xx...xx..",
+    ".......x.....x..",
+    "......xx....xx..",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  wombat: [
+    "................",
+    "................",
+    "......xxxx......",
+    "....xxqqqqxx....",
+    "...xqqqqqqqqx...",
+    "...xqzzqqzzqx...",
+    "...xqqqqqqqqx...",
+    "..xxqqqqqqqqxx..",
+    "...xxx....xxx...",
+    "....xx....xx....",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  lizard: [
+    "................",
+    "................",
+    ".............x..",
+    "....xxxxxxxxxk..",
+    "...xllllllllx...",
+    "...xlzllllllx...",
+    "...xllllllllx...",
+    "....xx.xx.xx....",
+    ".....x..x..x....",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  rock: [
+    "................",
+    "................",
+    ".....xxxx.......",
+    "...xxyyyyyxx....",
+    "..xyyyyyyyyx....",
+    "..xyyxyyyyyx....",
+    "...xxyyyyxx.....",
+    ".....xxxx.......",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  bird: [
+    "..........xx....",
+    ".........xddx...",
+    "........xddddx..",
+    "........xdzzx...",
+    ".........xddx...",
+    "..........xdx...",
+    ".........xddx...",
+    "........xddddx..",
+    ".......xdddddx..",
+    "........xx..xx..",
+    "........x....x..",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  marsupial: [
+    "................",
+    ".....xx.........",
+    "....xqzx........",
+    ".....xxx........",
+    "...xxqqqxx......",
+    "..xqqqqqqqx.....",
+    "..xqqpqqqxx.....",
+    "...xqqx..xx.....",
+    "...x..x...x.....",
+    "..xx..xx..x.....",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  reptile: [
+    "................",
+    "................",
+    ".............x..",
+    "....xxxxxxxxxj..",
+    "...xjjjjjjjjx...",
+    "...xjzjjjjjjx...",
+    "...xjjjjjjjjx...",
+    "....xx.xx.xx....",
+    ".....x..x..x....",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  vine: [
+    ".v..............",
+    "xv..............",
+    ".v..............",
+    "xv..............",
+    ".vv.............",
+    "..v.............",
+    ".xvx............",
+    "..vv............",
+    "...v............",
+    "..xv............",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  branch: [
+    "................",
+    "........xxxxx...",
+    ".......xnnnnnx..",
+    "......xnnnnnx...",
+    ".....xnnnnnx....",
+    "....xxxxx.......",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  leaf: [
+    "................",
+    ".......ff.......",
+    "......ffff......",
+    ".....ffffff.....",
+    "....ffffxff.....",
+    "...fffffxfff....",
+    "..ffffffxfff....",
+    "...fffffxfff....",
+    "....ffffxff.....",
+    ".....ffffff.....",
+    "......xxxx......",
+    ".......xx.......",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  bones: [
+    "................",
+    "....xx....xx....",
+    "...xoox..xoox...",
+    "...xooxxxooox...",
+    "....xxoxxx......",
+    ".....xoxx.......",
+    "....xxoxxx......",
+    "...xooxxxoo.....",
+    "...xoox..xoox...",
+    "....xx....xx....",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  layers: [
+    "................",
+    ".yyyyyyyyyyyyyy.",
+    ".xnxnxnxnxnxnxn.",
+    ".yyyyyyyyyyyyyy.",
+    ".xnxnxnxnxnxnxn.",
+    ".yyyyyyyyyyyyyy.",
+    ".xnxnxnxnxnxnxn.",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  tree: [
+    "................",
+    "......jjjj......",
+    "....jjlllljj....",
+    "...jllvvvvllj...",
+    "...jlvvvvvvlj...",
+    "....jlvvvvlj....",
+    ".....jvvvvj.....",
+    "......xxxx......",
+    "......xnnx......",
+    "......xnnx......",
+    "......xnnx......",
+    ".....xxnnxx.....",
+    "................",
+    "................",
+    "................",
+    "................"
+  ]
+};
+
+function blit(rows, dx, dy, scale, flip) {
+  const w = 16 * scale;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  if (flip) {
+    ctx.translate(Math.round(dx + w), Math.round(dy));
+    ctx.scale(-1, 1);
+    dx = 0;
+    dy = 0;
+  } else {
+    dx = Math.round(dx);
+    dy = Math.round(dy);
+  }
+  for (let y = 0; y < rows.length; y++) {
+    const line = rows[y];
+    for (let x = 0; x < line.length && x < 16; x++) {
+      const col = INK[line[x]];
+      if (!col) continue;
+      ctx.fillStyle = col;
+      ctx.fillRect(dx + x * scale, dy + y * scale, scale, scale);
+    }
+  }
+  ctx.restore();
+}
+
+function spriteFrame() {
+  return Math.floor(state.time * 7) % 2;
+}
+
+function nameTag(text, x, y) {
+  ctx.font = "bold 13px Verdana";
+  const w = ctx.measureText(text).width + 8;
+  const left = Math.round(x);
+  const top = Math.round(y);
+  ctx.fillStyle = "#142033";
+  ctx.fillRect(left, top, w, 16);
+  ctx.fillStyle = "#ffe56a";
+  ctx.fillRect(left, top, w, 2);
+  ctx.fillStyle = "#f7f4ea";
+  ctx.fillText(text, left + 4, top + 13);
+}
+
+function drawRound(x, y, w, h, r) {
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+  else ctx.rect(x, y, w, h);
+}
+
+function drawWorld() {
+  resize();
+  ctx.imageSmoothingEnabled = false;
+  const tile = tileSize();
+  const ox = originX(tile);
+  const here = state.level && state.level.lanes[state.player.lane];
+  const theme = here && here.theme ? here.theme : (state.level && state.level.lanes[0] && state.level.lanes[0].theme) || "mantle";
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (theme === "aus") {
+    ctx.fillStyle = "#e7c9a4";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#8d6248";
+    ctx.beginPath();
+    ctx.moveTo(40, canvas.height * 0.42);
+    ctx.lineTo(160, canvas.height * 0.22);
+    ctx.lineTo(280, canvas.height * 0.42);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(canvas.width - 260, canvas.height * 0.4);
+    ctx.lineTo(canvas.width - 140, canvas.height * 0.18);
+    ctx.lineTo(canvas.width - 20, canvas.height * 0.4);
+    ctx.fill();
+  } else if (theme === "rain") {
+    ctx.fillStyle = "#1d4a32";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "rgba(220, 230, 220, 0.08)";
+  } else {
+    const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    g.addColorStop(0, "#5a1a12");
+    g.addColorStop(1, "#e25b22");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  if (!state.level) return;
+  const onTransform = state.level.lanes[state.player.lane] && state.level.lanes[state.player.lane].section === "transform";
+  const shake = onTransform && !reducedMotion ? Math.sin(state.time * 14) * 1.5 : 0;
+  ctx.save();
+  ctx.translate(shake, 0);
+  const lanes = state.level.lanes;
+  for (let i = 0; i < lanes.length; i++) {
+    const y = laneY(i, tile);
+    if (y < -tile * 2 || y > canvas.height + tile) continue;
+    drawLane(lanes[i], ox, y, tile, i);
+  }
+  drawPlayer(ox + state.player.x * tile, laneY(state.player.lane, tile), tile);
+  ctx.restore();
+  if (theme === "rain") {
+    const s = Math.max(2, Math.floor(tile / 16));
+    for (let i = 0; i < 4; i++) {
+      blit(SPR.tree, 6, 30 + i * tile * 1.6, s, false);
+      blit(SPR.tree, canvas.width - 16 * s - 6, 70 + i * tile * 1.5, s, false);
+    }
+  }
+}
+
+function dust(ox, y, tile, color) {
+  ctx.fillStyle = color;
+  const s = Math.max(2, Math.floor(tile / 16));
+  for (let c = 0; c < COLS; c++) {
+    ctx.fillRect(ox + c * tile + s * 3, y + s * 4, s, s);
+    ctx.fillRect(ox + c * tile + s * 10, y + s * 9, s * 2, s);
+  }
+}
+
+function drawLane(lane, ox, y, tile, index) {
+  if (lane.kind === "lava") {
+    ctx.fillStyle = index % 2 ? "#ff7a32" : "#ff5a1f";
+    ctx.fillRect(ox, y, COLS * tile, tile - 4);
+    if (lane.section === "divergent") {
+      ctx.fillStyle = "rgba(255, 220, 80, 0.45)";
+      ctx.fillRect(ox + 4 * tile, y, 3 * tile, tile - 4);
+    }
+    lane.platforms.forEach((p) => drawPlate(ox, y, tile, p, lane));
+    drawArrows(lane, ox, y, tile);
+    if (lane.section === "convergent") drawMountains(lane, ox, y, tile);
+    if (lane.section === "transform") drawCrack(ox, y, tile);
+  } else if (lane.kind === "river") {
+    ctx.fillStyle = "#2f7ea8";
+    ctx.fillRect(ox, y, COLS * tile, tile - 4);
+    lane.platforms.forEach((p) => {
+      ctx.fillStyle = "#c48a48";
+      drawRound(ox + p.x * tile, y + 8, p.w * tile, tile - 20, 8);
+      ctx.fill();
+    });
+  } else if (lane.kind === "gap") {
+    ctx.fillStyle = "#243024";
+    ctx.fillRect(ox, y, COLS * tile, tile - 4);
+    lane.platforms.forEach((p) => drawPlate(ox, y, tile, p, lane));
+  } else if (lane.kind === "mud") {
+    ctx.fillStyle = "#6b4a28";
+    ctx.fillRect(ox, y, COLS * tile, tile - 4);
+  } else if (lane.theme === "rain") {
+    ctx.fillStyle = lane.kind === "pad" ? "#2f6b3a" : "#245c32";
+    ctx.fillRect(ox, y, COLS * tile, tile - 4);
+    dust(ox, y, tile, "#1f4a28");
+  } else if (lane.theme === "aus") {
+    ctx.fillStyle = lane.kind === "pad" ? "#d7b15a" : "#c9864a";
+    ctx.fillRect(ox, y, COLS * tile, tile - 4);
+    dust(ox, y, tile, lane.kind === "pad" ? "#6e8f45" : "#8a4e32");
+  } else {
+    ctx.fillStyle = "#6b5344";
+    ctx.fillRect(ox, y, COLS * tile, tile - 4);
+  }
+  if (lane.actors) lane.actors.forEach((a) => drawActor(a, ox, y, tile));
+  if (lane.info === "gloss") {
+    drawFossil(ox + 1.4 * tile, y, tile, "leaf");
+    drawFossil(ox + 4.2 * tile, y, tile, "reptile");
+  }
+  if (lane.info === "rocks") {
+    drawFossil(ox + 6 * tile, y, tile, "layers");
+    ctx.fillStyle = "#6d8a58";
+    ctx.beginPath();
+    ctx.moveTo(ox + 3 * tile, y + tile - 8);
+    ctx.lineTo(ox + 3.7 * tile, y - 6);
+    ctx.lineTo(ox + 4.4 * tile, y + tile - 8);
+    ctx.fill();
+  }
+  if (lane.mark === "wegener") drawWegener(ox + 8 * tile, y, tile);
+  if (lane.mark === "start") {
+    ctx.fillStyle = "#ffe56a";
+    ctx.font = "bold 16px Verdana";
+    ctx.fillText("START", ox + tile * 6.4, y + 20);
+    if (state.levelNum === 1) drawGuide(ox + 8.2 * tile, y, tile);
+  }
+  if (lane.gate) {
+    ctx.fillStyle = "#ffe56a";
+    ctx.font = "bold 14px Verdana";
+    ctx.fillText("STOP AND READ", ox + 8, y + tile * 0.55);
+  }
+}
+
+function drawPlate(ox, y, tile, p, lane) {
+  let drop = 0;
+  if (lane.section === "convergent" && p.group === "L") {
+    const other = lane.platforms.find((q) => q.group === "R");
+    if (other && p.x + p.w > other.x) drop = Math.max(8, Math.floor(tile * 0.18));
+  }
+  const x0 = Math.round(ox + p.x * tile);
+  const y0 = Math.round(y + tile * 0.12 + drop);
+  const w = Math.max(8, Math.round(p.w * tile));
+  const h = Math.round(tile * 0.72);
+  const s = Math.max(2, Math.floor(tile / 16));
+  ctx.fillStyle = p.group === "new" ? "#f0d2a4" : "#a86840";
+  ctx.fillRect(x0, y0, w, h);
+  ctx.fillStyle = "#3a2418";
+  ctx.fillRect(x0, y0, w, s);
+  ctx.fillRect(x0, y0 + h - s, w, s);
+  ctx.fillRect(x0, y0, s, h);
+  ctx.fillRect(x0 + w - s, y0, s, h);
+  ctx.fillStyle = p.group === "new" ? "#fff4d2" : "#6b4028";
+  for (let i = s * 3; i < w - s * 2; i += s * 5) ctx.fillRect(x0 + i, y0 + s * 2, s, h - s * 4);
+}
+
+function drawArrows(lane, ox, y, tile) {
+  ctx.fillStyle = "#fff4c2";
+  const mid = y + 8;
+  if (lane.section === "divergent") {
+    arrow(ox + 1.2 * tile, mid, -1);
+    arrow(ox + 8.5 * tile, mid, 1);
+  } else if (lane.section === "convergent") {
+    arrow(ox + 2 * tile, mid, 1);
+    arrow(ox + 8 * tile, mid, -1);
+  } else {
+    const dir = lane.platforms[0].vx > 0 ? 1 : -1;
+    arrow(ox + 2 * tile, mid, dir);
+    arrow(ox + 8 * tile, mid, dir);
+  }
+}
+
+function arrow(x, y, dir) {
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + dir * 22, y + 8);
+  ctx.lineTo(x, y + 16);
+  ctx.fill();
+}
+
+function drawMountains(lane, ox, y, tile) {
+  const left = lane.platforms.find((p) => p.group === "L");
+  const right = lane.platforms.find((p) => p.group === "R");
+  if (!left || !right) return;
+  if (left.x + left.w < right.x - 0.4) return;
+  const meet = ox + ((left.x + left.w + right.x) / 2) * tile;
+  ctx.fillStyle = "#6d8a58";
+  ctx.beginPath();
+  ctx.moveTo(meet, y - 8);
+  ctx.lineTo(meet + 16, y + tile - 8);
+  ctx.lineTo(meet - 16, y + tile - 8);
+  ctx.fill();
+}
+
+function drawCrack(ox, y, tile) {
+  ctx.strokeStyle = "rgba(40, 20, 10, 0.35)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(ox, y + tile - 4);
+  for (let i = 0; i <= COLS; i++) ctx.lineTo(ox + i * tile, y + tile - 4 + (i % 2 ? 3 : -2));
+  ctx.stroke();
+}
+
+const ACTOR_LABEL = {
+  kangaroo: "Kangaroo", emu: "Emu", wombat: "Wombat", monitor: "Lizard",
+  rock: "Rock", bird: "Bird", marsupial: "Marsupial", reptile: "Reptile", vine: "Vine"
+};
+
+function drawActor(a, ox, y, tile) {
+  const scale = Math.max(2, tile / 16);
+  const flip = a.vx < 0;
+  const bob = spriteFrame() && !reducedMotion ? scale : 0;
+  const x = ox + a.x * tile;
+  const hop = (a.kind === "kangaroo" || a.kind === "marsupial") && !reducedMotion ? bob : 0;
+  if (a.kind === "branch") {
+    const period = a.period || 3.4;
+    const phase = branchPhase(a);
+    if (phase > period - 1.25) {
+      ctx.fillStyle = "rgba(20, 16, 12, 0.35)";
+      ctx.beginPath();
+      ctx.ellipse(x + tile * 0.45, y + tile * 0.78, tile * 0.28, scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (phase > period - 0.42) blit(SPR.branch, x, y + scale, scale, false);
+    return;
+  }
+  const sheet = {
+    kangaroo: spriteFrame() ? SPR.kangarooHop : SPR.kangaroo,
+    marsupial: SPR.marsupial,
+    emu: SPR.emu,
+    bird: SPR.bird,
+    wombat: SPR.wombat,
+    monitor: SPR.lizard,
+    reptile: SPR.reptile,
+    rock: SPR.rock,
+    vine: SPR.vine
+  };
+  const rows = sheet[a.kind];
+  if (!rows) return;
+  blit(rows, x, y + scale - hop, scale, flip);
+  if (ACTOR_LABEL[a.kind] && !state.endless) nameTag(ACTOR_LABEL[a.kind], x, y - 2);
+}
+
+function drawFossil(x, y, tile, kind) {
+  const scale = Math.max(2, tile / 16);
+  ctx.fillStyle = "#f3e6c4";
+  ctx.fillRect(Math.round(x), Math.round(y + scale), tile - scale, tile - scale * 2);
+  ctx.fillStyle = "#1c2430";
+  ctx.fillRect(Math.round(x), Math.round(y + scale), tile - scale, scale);
+  const icon = kind === "leaf" ? SPR.leaf : kind === "reptile" ? SPR.bones : SPR.layers;
+  blit(icon, x, y, scale, false);
+  nameTag(kind === "leaf" ? "Leaf fossil" : kind === "reptile" ? "Reptile fossil" : "Rock layers", x, y - 2);
+}
+
+function drawGuide(x, y, tile) {
+  const scale = Math.max(2, tile / 16);
+  blit(SPR.guide, x, y, scale, false);
+  nameTag("Guide", x, y - 2);
+}
+
+function drawWegener(x, y, tile) {
+  const scale = Math.max(2, tile / 16);
+  blit(SPR.wegener, x, y, scale, false);
+  nameTag("Alfred Wegener", x - tile * 0.2, y - 2);
+}
+
+function drawPlayer(x, y, tile) {
+  const scale = Math.max(2, tile / 16);
+  const face = state.player.face || "up";
+  const walk = state.moveWait > 0 && spriteFrame() === 1;
+  let rows = SPR.heroUp;
+  let flip = false;
+  if (face === "down") rows = walk ? SPR.heroDownWalk : SPR.heroDown;
+  else if (face === "left") { rows = walk ? SPR.heroSideWalk : SPR.heroSide; flip = true; }
+  else if (face === "right") rows = walk ? SPR.heroSideWalk : SPR.heroSide;
+  else if (walk) rows = SPR.heroUp;
+  blit(rows, x, y, scale, flip);
+}
+
+/* Simple original continent shapes for the puzzle-piece lesson.
+   EDIT ART: change these polygons if you redraw the lesson card. */
+function drawFit(g, t) {
+  const w = g.canvas.width;
+  const h = g.canvas.height;
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = "#1a4e78";
+  g.fillRect(0, 0, w, h);
+  const slide = reducedMotion ? 1 : (Math.sin(t * 0.8) * 0.5 + 0.5);
+  const shift = (1 - slide) * 70;
+  g.fillStyle = "#d7c07a";
+  blob(g, 180 - shift, h / 2, [[0, -40], [50, -20], [40, 30], [-10, 46], [-46, 10]]);
+  g.fillStyle = "#c4a15a";
+  blob(g, 300 + shift, h / 2, [[-20, -46], [48, -24], [36, 36], [-30, 40], [-52, 0]]);
+  g.fillStyle = "#14324a";
+  g.font = "bold 16px Verdana";
+  g.fillText("South America", 90 - shift, h - 16);
+  g.fillText("Africa", 330 + shift, h - 16);
+}
+
+function blob(g, x, y, pts) {
+  g.beginPath();
+  g.moveTo(x + pts[0][0], y + pts[0][1]);
+  for (let i = 1; i < pts.length; i++) g.lineTo(x + pts[i][0], y + pts[i][1]);
+  g.closePath();
+  g.fill();
+}
+
+function frame(now) {
+  const t = now / 1000;
+  const dt = Math.min(0.033, state.time ? t - state.time : 0.016);
+  state.time = t;
+  if (state.mode === "play" && state.level && !worldFrozen()) {
+    state.moveWait = Math.max(0, state.moveWait - dt);
+    if (heldDir && state.moveWait <= 0) tryMove(heldDir);
+    updateWorld(dt);
+  }
+  if (state.screen === "play") {
+    drawWorld();
+    syncHud();
+  }
+  const fit = document.getElementById("fit-canvas");
+  if (!fit.hidden) drawFit(fit.getContext("2d"), state.time);
+  requestAnimationFrame(frame);
+}
+
+let tPresses = [];
+
+function devWarp(levelNum, gate) {
+  startLevel(levelNum, false);
+  if (gate) {
+    const idx = state.level.lanes.findIndex((lane) => lane.gate === gate);
+    if (idx >= 0) {
+      state.player.lane = idx;
+      state.player.x = levelStartX();
+      onArrive();
+    }
+  }
+  syncHud();
+}
+
+function devVictory() {
+  state.endless = false;
+  state.won = true;
+  state.levelNum = 3;
+  state.screen = "play";
+  if (!state.level || !state.level.lanes) state.level = buildLevel(3);
+  saveProgress();
+  document.getElementById("btn-endless").hidden = false;
+  hideAllOverlays();
+  state.mode = "win";
+  showVictory();
+}
+
+function renderTeacher() {
+  const where = state.endless
+    ? "Endless Crossing. Score " + state.score + "."
+    : (state.level ? state.level.name : "Title screen");
+  const lane = state.level && state.level.lanes ? state.level.lanes[state.player.lane] : null;
+  const lines = [
+    "Place: " + where,
+    lane && !state.endless ? "Checkpoint: " + lane.check : "",
+    "Finished the crossing: " + (state.won ? "Yes" : "No"),
+    "Endless best score: " + (state.best || 0)
+  ].filter(Boolean);
+  const body = document.getElementById("teacher-body");
+  body.innerHTML = "";
+  lines.forEach((line) => {
+    const p = document.createElement("p");
+    p.textContent = line;
+    body.appendChild(p);
+  });
+  const warps = document.getElementById("teacher-warps");
+  warps.innerHTML = "";
+  [
+    ["Level 1 start", () => devWarp(1)],
+    ["Divergent question", () => devWarp(1, "divergent")],
+    ["Convergent question", () => devWarp(1, "convergent")],
+    ["Transform question", () => devWarp(1, "transform")],
+    ["Alfred Wegener", () => devWarp(1, "wegener")],
+    ["Level 2 start", () => devWarp(2)],
+    ["Australia question", () => devWarp(2, "level2")],
+    ["Level 3 start", () => devWarp(3)],
+    ["Final test", () => devWarp(3, "final")]
+  ].forEach((pair) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ghost";
+    btn.textContent = pair[0];
+    btn.addEventListener("click", pair[1]);
+    warps.appendChild(btn);
+  });
+  const key = document.getElementById("teacher-key");
+  key.innerHTML = "";
+  const answers = [
+    "Divergent: " + BOUNDARY_Q.divergent.answer,
+    "Convergent: " + BOUNDARY_Q.convergent.answer,
+    "Transform: " + BOUNDARY_Q.transform.answer
+  ];
+  WEGENER_QS.forEach((q) => answers.push(q.q + " " + q.answer));
+  answers.push(LEVEL2_Q.q + " " + LEVEL2_Q.answer);
+  FINAL_QS.forEach((q) => answers.push(q.q + " " + q.answer));
+  answers.forEach((line) => {
+    const p = document.createElement("p");
+    p.textContent = line;
+    key.appendChild(p);
+  });
+  document.getElementById("teacher-sound").textContent = state.mute ? "Sound on" : "Mute";
+}
+
+function openTeacher() {
+  heldDir = null;
+  renderTeacher();
+  show("teacher", true);
+}
+
+function dirFromKey(e) {
+  const k = e.key.toLowerCase();
+  if (k === "arrowup" || k === "w") return "up";
+  if (k === "arrowdown" || k === "s") return "down";
+  if (k === "arrowleft" || k === "a") return "left";
+  if (k === "arrowright" || k === "d") return "right";
+  return null;
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.code === "KeyT" && !e.repeat) {
+    const now = Date.now();
+    tPresses.push(now);
+    tPresses = tPresses.filter((stamp) => now - stamp < 1600);
+    if (tPresses.length >= 3) {
+      tPresses = [];
+      openTeacher();
+    }
+    return;
+  }
+  if (e.code === "Escape" && !document.getElementById("teacher").hidden) {
+    show("teacher", false);
+    return;
+  }
+  if ((e.key === "Enter" || e.key === " ") && state.mode === "talk") {
+    if (e.target && e.target.id === "talk-next") return;
+    e.preventDefault();
+    document.getElementById("talk-next").click();
+    return;
+  }
+  if (e.key >= "1" && e.key <= "4" && state.mode === "quiz" && !worldFrozen()) {
+    e.preventDefault();
+    pickChoice(Number(e.key) - 1);
+    return;
+  }
+  const d = dirFromKey(e);
+  if (!d) return;
+  e.preventDefault();
+  if (e.repeat || locked() || worldFrozen()) return;
+  heldDir = d;
+  tryMove(d);
+});
+window.addEventListener("keyup", (e) => {
+  const d = dirFromKey(e);
+  if (d && heldDir === d) heldDir = null;
+});
+window.addEventListener("blur", () => { heldDir = null; });
+
+document.getElementById("touch").addEventListener("pointerdown", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  e.preventDefault();
+  heldDir = btn.dataset.dir;
+  tryMove(heldDir);
+});
+document.getElementById("touch").addEventListener("pointerup", () => { heldDir = null; });
+document.getElementById("touch").addEventListener("pointercancel", () => { heldDir = null; });
+document.getElementById("touch").addEventListener("pointerleave", () => { heldDir = null; });
+
+document.getElementById("btn-begin").addEventListener("click", () => {
+  const saved = loadProgress();
+  if (saved && !saved.won && saved.level > 1) {
+    state.mode = "confirm";
+    document.getElementById("confirm-title").textContent = "Start from Level 1?";
+    document.getElementById("confirm-text").textContent = "This begins again at Level 1. Continue keeps your saved level.";
+    document.getElementById("confirm-yes").textContent = "Start Level 1";
+    document.getElementById("confirm-yes").onclick = () => startLevel(1, true);
+    show("title", false);
+    show("confirm", true);
+    return;
+  }
+  startLevel(1, true);
+});
+
+document.getElementById("btn-continue").addEventListener("click", () => {
+  const saved = loadProgress();
+  if (!saved) return;
+  state.mute = !!saved.mute;
+  if (saved.won) {
+    state.won = true;
+    state.levelNum = 3;
+    state.level = buildLevel(3);
+    state.screen = "play";
+    hideAllOverlays();
+    showVictory();
+    state.mode = "win";
+    syncHud();
+    return;
+  }
+  startLevel(saved.level || 1, true);
+});
+
+document.getElementById("talk-next").addEventListener("click", () => {
+  if (!state.talk) return;
+  state.talk.i += 1;
+  if (state.talk.i >= state.talk.lines.length) {
+    show("talk", false);
+    const done = state.talk.done;
+    state.talk = null;
+    if (done) done();
+    else state.mode = "play";
+    return;
+  }
+  renderTalk();
+});
+
+document.getElementById("fact-ok").addEventListener("click", () => {
+  show("fact", false);
+  const reset = state.pendingReset;
+  state.pendingReset = null;
+  if (reset === "level") {
+    startLevel(state.levelNum, false);
+    return;
+  }
+  state.mode = "play";
+});
+
+function openHelp() {
+  show("help", true);
+}
+document.getElementById("btn-help").addEventListener("click", openHelp);
+document.getElementById("title-help").addEventListener("click", openHelp);
+document.getElementById("help-close").addEventListener("click", () => show("help", false));
+
+document.getElementById("btn-restart").addEventListener("click", () => {
+  if (state.screen !== "play" && state.mode === "title") return;
+  if (!state.level && !state.endless) return;
+  heldDir = null;
+  if (state.endless) {
+    document.getElementById("confirm-title").textContent = "Start this run over?";
+    document.getElementById("confirm-text").textContent = "Your best score stays saved.";
+    document.getElementById("confirm-yes").textContent = "Start over";
+    document.getElementById("confirm-yes").onclick = () => startEndless();
+    show("confirm", true);
+    return;
+  }
+  document.getElementById("confirm-title").textContent = "Restart this level?";
+  document.getElementById("confirm-text").textContent = "You will go back to the start of this level. The other levels stay saved.";
+  document.getElementById("confirm-yes").textContent = "Restart level";
+  document.getElementById("confirm-yes").onclick = () => startLevel(state.levelNum, true);
+  show("confirm", true);
+});
+document.getElementById("confirm-no").addEventListener("click", () => {
+  show("confirm", false);
+  if (state.screen !== "play") show("title", true);
+});
+
+function toggleMute() {
+  state.mute = !state.mute;
+  saveProgress();
+  syncHud();
+}
+document.getElementById("btn-mute").addEventListener("click", toggleMute);
+document.getElementById("title-mute").addEventListener("click", toggleMute);
+
+document.getElementById("win-again").addEventListener("click", () => startLevel(1, true));
+document.getElementById("win-endless").addEventListener("click", startEndless);
+document.getElementById("btn-endless").addEventListener("click", startEndless);
+document.getElementById("over-again").addEventListener("click", startEndless);
+document.getElementById("over-back").addEventListener("click", () => {
+  state.endless = false;
+  state.won = true;
+  state.mode = "win";
+  hideAllOverlays();
+  showVictory();
+  syncHud();
+});
+document.getElementById("teacher-close").addEventListener("click", () => show("teacher", false));
+document.getElementById("teacher-restart").addEventListener("click", () => {
+  if (state.endless) startEndless();
+  else if (state.level) startLevel(state.levelNum, false);
+});
+document.getElementById("teacher-sound").addEventListener("click", () => {
+  state.mute = !state.mute;
+  saveProgress();
+  syncHud();
+  renderTeacher();
+});
+document.getElementById("teacher-endless").addEventListener("click", () => {
+  state.won = true;
+  saveProgress();
+  document.getElementById("btn-endless").hidden = false;
+  startEndless();
+});
+document.getElementById("teacher-win").addEventListener("click", devVictory);
+document.getElementById("teacher-reset").addEventListener("click", () => {
+  show("teacher", false);
+  document.getElementById("confirm-title").textContent = "Reset all progress?";
+  document.getElementById("confirm-text").textContent = "This clears the level, the win, and the endless best score.";
+  document.getElementById("confirm-yes").textContent = "Reset everything";
+  document.getElementById("confirm-yes").onclick = () => {
+    try { localStorage.removeItem(SAVE_KEY); } catch (err) { /* ignore */ }
+    state.best = 0;
+    state.won = false;
+    state.endless = false;
+    state.score = 0;
+    state.level = null;
+    state.mode = "title";
+    state.screen = "title";
+    hideAllOverlays();
+    show("title", true);
+    document.getElementById("btn-continue").hidden = true;
+    document.getElementById("btn-endless").hidden = true;
+    syncHud();
+  };
+  show("confirm", true);
+});
+document.getElementById("win-review").addEventListener("click", () => show("review", true));
+document.getElementById("review-close").addEventListener("click", () => show("review", false));
+
+const saved = loadProgress();
+if (saved && saved.mute) state.mute = true;
+if (saved && saved.best) state.best = saved.best;
+if (saved && (saved.level || saved.won)) document.getElementById("btn-continue").hidden = false;
+if (saved && (saved.won || saved.cleared)) document.getElementById("btn-endless").hidden = false;
+syncHud();
+state.screen = "title";
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
