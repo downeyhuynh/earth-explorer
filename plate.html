@@ -122,18 +122,17 @@
 <div id="title" class="overlay">
   <div class="card">
     <h1>PLATE EXPLORER</h1>
-    <p class="sub">The Continental Crossing</p>
-    <p class="quote">Earth’s surface may look still, but it is always changing. You will travel across moving tectonic plates and collect evidence that the continents were once connected.</p>
-    <p><strong>Mission:</strong> Cross all three levels, learn about plate movement, and prove that the continents move.</p>
-    <div class="row">
-      <button type="button" class="primary" id="btn-begin">Begin Mission</button>
-      <button type="button" class="ghost" id="btn-continue" hidden>Continue</button>
-      <button type="button" class="ghost" id="btn-endless" hidden>Endless Crossing</button>
+    <p class="sub">Continental Drift</p>
+    <p class="quote">Earth’s surface may look still, but it is always changing. Cross the moving plates and collect evidence that the continents were once connected.</p>
+    <div id="endless-offer" hidden>
+      <p id="title-rule"><strong>Endless:</strong> Every 50 you get through is 5 Dojo Points. 100 is 10. 150 is 15. Points come only from your high score.</p>
+      <p id="title-best">High score: 0</p>
+      <p id="title-dojo">Dojo Points: 0</p>
     </div>
     <div class="row">
-      <button type="button" class="ghost" id="title-mute">Sound: On</button>
-      <button type="button" class="ghost" id="title-help">Instructions</button>
-      <a class="ghost" href="index.html">Return to Journey to the Core</a>
+      <button type="button" class="primary" id="btn-begin">Start Drift</button>
+      <button type="button" class="ghost" id="btn-endless" hidden>Endless</button>
+      <a class="ghost" href="index.html?core=1">Return to Journey to the Core</a>
     </div>
   </div>
 </div>
@@ -178,7 +177,9 @@
       <li>A wrong answer, a fall, or a hit sends you back to the start of this level.</li>
       <li>That level starts fresh. The other levels stay saved.</li>
       <li>Read each message. Answer each question before you move on.</li>
-      <li>After you finish, Endless Crossing keeps going. Your best score is saved.</li>
+      <li>Drift keeps going. Every 50 is a rest stop and one question.</li>
+      <li>A wrong answer starts that run over. Your high score stays saved.</li>
+      <li>Every 50 on your high score is 5 Dojo Points. 100 is 10.</li>
     </ul>
     <div class="row"><button type="button" class="primary" id="help-close">Close</button></div>
   </div>
@@ -210,10 +211,10 @@
     <p>You earned 10 Dojo Points!</p>
     <p id="win-best" hidden></p>
     <div class="row">
-      <button type="button" class="primary" id="win-endless">Endless Crossing</button>
+      <button type="button" class="primary" id="win-endless">Endless</button>
       <button type="button" class="ghost" id="win-again">Play Again</button>
       <button type="button" class="ghost" id="win-review">Review What I Learned</button>
-      <a class="ghost" href="index.html">Return to Journey to the Core</a>
+      <a class="ghost" href="index.html?core=1">Return to Journey to the Core</a>
     </div>
   </div>
 </div>
@@ -224,6 +225,7 @@
     <p id="over-why"></p>
     <p id="over-score"></p>
     <p id="over-best"></p>
+    <p id="over-dojo"></p>
     <div class="row">
       <button type="button" class="primary" id="over-again">Play Again</button>
       <button type="button" class="ghost" id="over-back">Back</button>
@@ -242,7 +244,7 @@
     <div class="row">
       <button type="button" class="ghost" id="teacher-restart">Restart this level</button>
       <button type="button" class="ghost" id="teacher-sound">Mute</button>
-      <button type="button" class="ghost" id="teacher-endless">Endless Crossing</button>
+      <button type="button" class="ghost" id="teacher-endless">Endless</button>
       <button type="button" class="ghost" id="teacher-win">Victory screen</button>
       <button type="button" class="ghost" id="teacher-reset">Reset all progress</button>
       <button type="button" class="primary" id="teacher-close">Close</button>
@@ -583,9 +585,11 @@ const state = {
   talk: null,
   pendingReset: null,
   won: false,
+  storyDone: false,
   endless: false,
   score: 0,
-  best: 0
+  best: 0,
+  restDone: {}
 };
 let heldDir = null;
 let audioCtx = null;
@@ -599,8 +603,9 @@ function saveProgress() {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       level: state.endless ? ((prev && prev.level) || 3) : (playing ? state.levelNum : (prev && prev.level) || 0),
       mute: state.mute,
-      won: state.endless ? true : (playing ? state.won : !!(prev && prev.won)),
-      cleared: !!(state.won || state.endless || (prev && prev.cleared)),
+      won: !!(state.storyDone || (prev && prev.storyDone)),
+      cleared: !!(state.storyDone || (prev && prev.storyDone)),
+      storyDone: !!(state.storyDone || (prev && prev.storyDone)),
       best: Math.max(state.best || 0, (prev && prev.best) || 0)
     }));
   } catch (err) { /* school browser may block storage */ }
@@ -639,11 +644,24 @@ function locked() {
   return state.mode !== "play";
 }
 
+function dojoPoints(score) {
+  return Math.floor((score || 0) / 50) * 5;
+}
+
+function refreshTitleStats() {
+  const best = state.best || 0;
+  const unlocked = !!state.storyDone;
+  document.getElementById("title-best").textContent = "High score: " + best;
+  document.getElementById("title-dojo").textContent = "Dojo Points: " + dojoPoints(best);
+  document.getElementById("endless-offer").hidden = !unlocked;
+  document.getElementById("btn-endless").hidden = !unlocked;
+}
+
 function syncHud() {
   const lv = state.level;
   if (state.endless) {
-    document.getElementById("level-name").textContent = "Endless Crossing";
-    document.getElementById("check-name").textContent = "Score: " + state.score + "    Best: " + state.best;
+    document.getElementById("level-name").textContent = "Endless";
+    document.getElementById("check-name").textContent = "Score: " + state.score + "    Best: " + state.best + "    Dojo: " + dojoPoints(state.best);
   } else {
     document.getElementById("level-name").textContent = lv ? lv.name : "Plate Explorer";
     const lane = lv ? lv.lanes[state.player.lane] : null;
@@ -654,7 +672,6 @@ function syncHud() {
   temp.hidden = !hot;
   if (hot) temp.textContent = "Mantle temperature: extremely hot (about 500–4,000°C)";
   document.getElementById("btn-mute").textContent = state.mute ? "Sound" : "Mute";
-  document.getElementById("title-mute").textContent = state.mute ? "Sound: Off" : "Sound: On";
 }
 
 function startLevel(n, playIntro) {
@@ -692,39 +709,45 @@ function ensureEndless(ahead) {
 
 function makeEndlessLane(i) {
   const theme = Math.floor(i / 12) % 2 === 0 ? "aus" : "rain";
-  if (i < 3 || i % 5 === 0) return { kind: "pad", check: "Grass", theme };
+  if (i > 0 && i % 50 === 0) return { kind: "pad", check: "Rest stop", theme, rest: true };
+  const band = Math.floor(i / 50);
+  const speed = Math.min(2.8, 0.5 + i * 0.014 + band * 0.06);
+  const safeEvery = 5 + band * 3;
+  if (i < 3 || i % safeEvery === 0) return { kind: "pad", check: "Grass", theme };
   const dir = i % 2 === 0 ? 1 : -1;
-  const speed = Math.min(2.1, 0.5 + Math.floor(i / 10) * 0.12);
-  if (i % 5 === 4) {
+  const riverCut = band < 2 ? 5 : 4;
+  if (i % riverCut === riverCut - 1) {
+    const logW = Math.max(1.25, 2.45 - band * 0.22);
+    const gap = 3.15 + band * 0.2;
     return {
       kind: "river",
       check: "River",
       theme,
       platforms: [
-        { x: (i % 3) * 0.4, w: 2.4, vx: dir * speed * 0.85, group: "log" },
-        { x: 4 + (i % 2), w: 2.2, vx: dir * speed * 0.85, group: "log" },
-        { x: 8.1, w: 2.3, vx: dir * speed * 0.85, group: "log" }
+        { x: (i % 3) * 0.25, w: logW, vx: dir * speed * 0.92, group: "log" },
+        { x: gap + 0.8, w: logW, vx: dir * speed * 0.92, group: "log" },
+        { x: gap * 2 + 0.6, w: Math.max(1.2, logW - 0.08), vx: dir * speed * 0.92, group: "log" }
       ]
     };
   }
   const kinds = ["kangaroo", "emu", "wombat", "monitor", "rock", "bird", "marsupial", "reptile"];
   const kind = kinds[i % kinds.length];
-  const count = 2 + (i > 24 ? 1 : 0) + (i > 48 ? 1 : 0);
+  const count = Math.min(5, 2 + Math.floor(i / 30));
   const actors = [];
   for (let n = 0; n < count; n++) {
-    actors.push(actor(kind, (n * COLS) / count, dir * speed, kind === "emu" || kind === "rock" ? 1.3 : 1.15));
+    actors.push(actor(kind, (n * (COLS + 1.4)) / count, dir * speed, kind === "emu" || kind === "rock" ? 1.35 : 1.15));
   }
   return { kind: "road", check: "Lane", theme, actors };
 }
 
-function startEndless() {
+function startEndless(force) {
+  if (force !== true && !state.storyDone && !state.endless) return;
   heldDir = null;
   state.endless = true;
-  state.won = true;
   state.screen = "play";
   state.mode = "play";
   state.score = 0;
-  state.level = { name: "Endless Crossing", lanes: [] };
+  state.level = { name: "Drift", lanes: [] };
   state.player.x = levelStartX();
   state.player.lane = 0;
   state.player.face = "up";
@@ -732,6 +755,7 @@ function startEndless() {
   state.seenInfo = {};
   state.quiz = null;
   state.pendingReset = null;
+  state.restDone = {};
   ensureEndless(18);
   hideAllOverlays();
   syncHud();
@@ -744,18 +768,50 @@ function noteScore() {
       state.best = state.score;
       saveProgress();
     }
+    syncHud();
   }
+}
+
+function restQuestion() {
+  const pool = [];
+  ["divergent", "convergent", "transform"].forEach((id) => {
+    const q = BOUNDARY_Q[id];
+    pool.push({ q: q.q, choices: q.choices.slice(), answer: q.answer });
+  });
+  WEGENER_QS.forEach((q) => pool.push({ q: q.q, choices: q.choices.slice(), answer: q.answer }));
+  pool.push({ q: LEVEL2_Q.q, choices: LEVEL2_Q.choices.slice(), answer: LEVEL2_Q.answer });
+  FINAL_QS.forEach((q) => pool.push({ q: q.q, choices: q.choices.slice(), answer: q.answer }));
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function askRest(laneIndex) {
+  const pack = restQuestion();
+  pack.lead = "Rest stop at " + laneIndex + ". A wrong answer starts this run over.";
+  ask(pack, (ok) => {
+    if (ok) {
+      state.restDone[laneIndex] = true;
+      noteScore();
+      state.mode = "play";
+      syncHud();
+      beep(660, 0.1, "triangle");
+      return;
+    }
+    const answer = /[.!?]$/.test(pack.answer) ? pack.answer : pack.answer + ".";
+    say([{ who: "Rest stop", text: "Not yet. The answer is: " + answer + " This run starts over." }], () => {
+      startEndless();
+    });
+  });
 }
 
 function endEndless(why) {
   heldDir = null;
   if (state.score > state.best) state.best = state.score;
-  state.won = true;
   saveProgress();
   state.mode = "endless-over";
   document.getElementById("over-why").textContent = why;
   document.getElementById("over-score").textContent = "Score: " + state.score;
-  document.getElementById("over-best").textContent = "Best: " + state.best;
+  document.getElementById("over-best").textContent = "High score: " + state.best;
+  document.getElementById("over-dojo").textContent = "Dojo Points from your high score: " + dojoPoints(state.best) + ". Every 50 is 5. 100 is 10.";
   show("over", true);
 }
 
@@ -772,7 +828,7 @@ function showVictory() {
   const line = document.getElementById("win-best");
   if (state.best > 0) {
     line.hidden = false;
-    line.textContent = "Endless best score: " + state.best;
+    line.textContent = "High score: " + state.best + ". Dojo Points: " + dojoPoints(state.best);
   } else {
     line.hidden = true;
   }
@@ -940,6 +996,7 @@ function askWegener(i) {
 function askFinal() {
   if (state.quizIndex >= FINAL_QS.length) {
     state.won = true;
+    state.storyDone = true;
     state.levelNum = 3;
     saveProgress();
     state.mode = "win";
@@ -1031,6 +1088,11 @@ function tryMove(dir) {
 
 function onArrive() {
   if (state.endless) {
+    const lane = state.level.lanes[state.player.lane];
+    if (lane && lane.rest && !state.restDone[state.player.lane]) {
+      askRest(state.player.lane);
+      return;
+    }
     noteScore();
     ensureEndless(16);
     return;
@@ -1740,6 +1802,13 @@ function drawLane(lane, ox, y, tile, index) {
     ctx.fillStyle = "#6b5344";
     ctx.fillRect(ox, y, COLS * tile, tile - 4);
   }
+  if (lane.rest) {
+    ctx.fillStyle = "rgba(255, 229, 106, 0.72)";
+    ctx.fillRect(ox, y, COLS * tile, tile - 4);
+    ctx.fillStyle = "#1a1203";
+    ctx.font = "bold " + Math.max(14, Math.floor(tile * 0.34)) + "px Verdana";
+    ctx.fillText("REST " + index, ox + tile * 3.1, y + tile * 0.62);
+  }
   if (lane.actors) lane.actors.forEach((a) => drawActor(a, ox, y, tile));
   if (lane.info === "gloss") {
     drawFossil(ox + 1.4 * tile, y, tile, "leaf");
@@ -1977,11 +2046,11 @@ function devWarp(levelNum, gate) {
 function devVictory() {
   state.endless = false;
   state.won = true;
+  state.storyDone = true;
   state.levelNum = 3;
   state.screen = "play";
   if (!state.level || !state.level.lanes) state.level = buildLevel(3);
   saveProgress();
-  document.getElementById("btn-endless").hidden = false;
   hideAllOverlays();
   state.mode = "win";
   showVictory();
@@ -1989,14 +2058,14 @@ function devVictory() {
 
 function renderTeacher() {
   const where = state.endless
-    ? "Endless Crossing. Score " + state.score + "."
+    ? "Drift. Score " + state.score + ". High score " + state.best + ". Dojo " + dojoPoints(state.best) + "."
     : (state.level ? state.level.name : "Title screen");
   const lane = state.level && state.level.lanes ? state.level.lanes[state.player.lane] : null;
   const lines = [
     "Place: " + where,
     lane && !state.endless ? "Checkpoint: " + lane.check : "",
     "Finished the crossing: " + (state.won ? "Yes" : "No"),
-    "Endless best score: " + (state.best || 0)
+    "High score: " + (state.best || 0) + ". Dojo Points: " + dojoPoints(state.best || 0)
   ].filter(Boolean);
   const body = document.getElementById("teacher-body");
   body.innerHTML = "";
@@ -2016,7 +2085,8 @@ function renderTeacher() {
     ["Level 2 start", () => devWarp(2)],
     ["Australia question", () => devWarp(2, "level2")],
     ["Level 3 start", () => devWarp(3)],
-    ["Final test", () => devWarp(3, "final")]
+    ["Final test", () => devWarp(3, "final")],
+    ["Endless", () => startEndless(true)]
   ].forEach((pair) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -2110,36 +2180,13 @@ document.getElementById("touch").addEventListener("pointerleave", () => { heldDi
 
 document.getElementById("btn-begin").addEventListener("click", () => {
   const saved = loadProgress();
-  if (saved && !saved.won && saved.level > 1) {
-    state.mode = "confirm";
-    document.getElementById("confirm-title").textContent = "Start from Level 1?";
-    document.getElementById("confirm-text").textContent = "This begins again at Level 1. Continue keeps your saved level.";
-    document.getElementById("confirm-yes").textContent = "Start Level 1";
-    document.getElementById("confirm-yes").onclick = () => startLevel(1, true);
-    show("title", false);
-    show("confirm", true);
+  if (saved && !saved.storyDone && saved.level > 1) {
+    startLevel(saved.level, true);
     return;
   }
   startLevel(1, true);
 });
-
-document.getElementById("btn-continue").addEventListener("click", () => {
-  const saved = loadProgress();
-  if (!saved) return;
-  state.mute = !!saved.mute;
-  if (saved.won) {
-    state.won = true;
-    state.levelNum = 3;
-    state.level = buildLevel(3);
-    state.screen = "play";
-    hideAllOverlays();
-    showVictory();
-    state.mode = "win";
-    syncHud();
-    return;
-  }
-  startLevel(saved.level || 1, true);
-});
+document.getElementById("btn-endless").addEventListener("click", () => startEndless());
 
 document.getElementById("talk-next").addEventListener("click", () => {
   if (!state.talk) return;
@@ -2170,7 +2217,6 @@ function openHelp() {
   show("help", true);
 }
 document.getElementById("btn-help").addEventListener("click", openHelp);
-document.getElementById("title-help").addEventListener("click", openHelp);
 document.getElementById("help-close").addEventListener("click", () => show("help", false));
 
 document.getElementById("btn-restart").addEventListener("click", () => {
@@ -2202,18 +2248,17 @@ function toggleMute() {
   syncHud();
 }
 document.getElementById("btn-mute").addEventListener("click", toggleMute);
-document.getElementById("title-mute").addEventListener("click", toggleMute);
 
 document.getElementById("win-again").addEventListener("click", () => startLevel(1, true));
 document.getElementById("win-endless").addEventListener("click", startEndless);
-document.getElementById("btn-endless").addEventListener("click", startEndless);
 document.getElementById("over-again").addEventListener("click", startEndless);
 document.getElementById("over-back").addEventListener("click", () => {
   state.endless = false;
-  state.won = true;
-  state.mode = "win";
+  state.mode = "title";
+  state.screen = "title";
   hideAllOverlays();
-  showVictory();
+  show("title", true);
+  refreshTitleStats();
   syncHud();
 });
 document.getElementById("teacher-close").addEventListener("click", () => show("teacher", false));
@@ -2228,10 +2273,7 @@ document.getElementById("teacher-sound").addEventListener("click", () => {
   renderTeacher();
 });
 document.getElementById("teacher-endless").addEventListener("click", () => {
-  state.won = true;
-  saveProgress();
-  document.getElementById("btn-endless").hidden = false;
-  startEndless();
+  startEndless(true);
 });
 document.getElementById("teacher-win").addEventListener("click", devVictory);
 document.getElementById("teacher-reset").addEventListener("click", () => {
@@ -2250,8 +2292,8 @@ document.getElementById("teacher-reset").addEventListener("click", () => {
     state.screen = "title";
     hideAllOverlays();
     show("title", true);
-    document.getElementById("btn-continue").hidden = true;
-    document.getElementById("btn-endless").hidden = true;
+    state.storyDone = false;
+    refreshTitleStats();
     syncHud();
   };
   show("confirm", true);
@@ -2262,8 +2304,8 @@ document.getElementById("review-close").addEventListener("click", () => show("re
 const saved = loadProgress();
 if (saved && saved.mute) state.mute = true;
 if (saved && saved.best) state.best = saved.best;
-if (saved && (saved.level || saved.won)) document.getElementById("btn-continue").hidden = false;
-if (saved && (saved.won || saved.cleared)) document.getElementById("btn-endless").hidden = false;
+if (saved && saved.storyDone) state.storyDone = true;
+refreshTitleStats();
 syncHud();
 state.screen = "title";
 requestAnimationFrame(frame);
