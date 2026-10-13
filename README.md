@@ -35,6 +35,8 @@ There are no timers.
 
 **Plate Explorer: The Continental Crossing** is a second game on this site. Open it from the main menu, or open `plate.html`. Students cross moving plates, then Australia and a rainforest, and learn about mantle movement, plate boundaries, Pangaea, Alfred Wegener, and fossil evidence. Progress for that game is saved separately in the browser.
 
+**Volcano Explorer: Ring of Fire** is a third game. Open `ring-of-fire/index.html`, or the Ring of Fire link on the Plate Explorer start screen. Students classify 12 volcanoes, then place them on a world map. Setup, teacher mode, and the answer key are in `volcano/README.md`.
+
 ## How to open the game
 
 - **On this computer:** double-click `index.html`, or drag it into Chrome.
